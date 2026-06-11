@@ -1,0 +1,24 @@
+---
+description: Check architecture baseline before and after changes to prevent drift.
+globs:
+  - "backend/**"
+  - "frontend/**"
+  - "docs/architecture/**"
+alwaysApply: true
+---
+
+# Architecture Drift Check
+
+Before and after implementation:
+
+1. Read `docs/architecture/ARCHITECTURE_BASELINE.md`.
+2. Run checklist in `docs/architecture/ARCHITECTURE_DRIFT_CHECK.md`.
+3. If drift is detected, document in PLAN or create an ADR under `docs/decisions/`.
+
+Key invariants:
+
+- Controller → Service → Mapper layering
+- Agent Tool → Service (never Mapper directly)
+- Backend owns all AI API calls
+- RAG answers include sources
+- Agent execution writes trace

@@ -1,0 +1,31 @@
+---
+description: Write detailed system specs with API contracts, state machines, and acceptance criteria.
+globs:
+  - "docs/specs/**"
+alwaysApply: false
+---
+
+# Spec Rule
+
+Write SPEC in **Chinese** (正文中文；API/JSON/SQL/状态枚举可保留英文).
+
+Create SPEC documents under `docs/specs/` using `SPEC-TEMPLATE.md`.
+
+SPEC must include:
+
+- Domain model
+- API contract (request/response/error codes)
+- Frontend interaction
+- Backend workflow
+- Agent workflow (if applicable)
+- RAG workflow (if applicable)
+- Database schema changes
+- State transitions
+- Permission rules
+- Trace / logging requirements
+- Testing strategy
+- Acceptance checklist
+
+API contract changes require SPEC update before code change.
+
+Database schema changes require SPEC update before migration.

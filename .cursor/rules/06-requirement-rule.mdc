@@ -1,0 +1,24 @@
+---
+description: Translate PRD into structured requirements with inputs, outputs, and user flows.
+globs:
+  - "docs/requirements/**"
+alwaysApply: false
+---
+
+# Requirement Rule
+
+Write REQ in **Chinese**.
+
+Create REQ documents under `docs/requirements/` using `REQ-TEMPLATE.md`.
+
+REQ must define:
+
+- Functional requirements (numbered)
+- Non-functional requirements
+- User flows
+- Input / output definitions
+- Edge cases
+- Dependencies on other features
+- Traceability to PRD
+
+Do not write SPEC or code until REQ is reviewed against PRD scope.

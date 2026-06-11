@@ -1,0 +1,43 @@
+create table if not exists evaluation_run (
+    id varchar(80) not null,
+    evaluation_set_id varchar(80) not null,
+    set_type varchar(40) not null,
+    prompt_code varchar(120) not null,
+    prompt_version varchar(120) not null,
+    model_name varchar(120),
+    run_status varchar(40) not null,
+    sample_count int not null,
+    created_by varchar(120) not null,
+    trace_id varchar(120),
+    error_message varchar(200),
+    metadata_json text,
+    started_at datetime(6) not null,
+    finished_at datetime(6),
+    created_at datetime(6) not null,
+    updated_at datetime(6) not null,
+    primary key (id),
+    key idx_evaluation_run_set_prompt (evaluation_set_id, prompt_code, prompt_version, run_status),
+    key idx_evaluation_run_created_by (created_by),
+    constraint fk_evaluation_run_set foreign key (evaluation_set_id) references evaluation_set(id),
+    constraint ck_evaluation_run_status check (run_status in ('SUCCEEDED', 'FAILED')),
+    constraint ck_evaluation_run_sample_count check (sample_count >= 0),
+    constraint ck_evaluation_run_succeeded_sample_count check (run_status <> 'SUCCEEDED' or sample_count > 0),
+    constraint ck_evaluation_run_set_type check (set_type in ('RAG_QUESTION', 'GRADING_SAMPLE', 'RESOURCE_GENERATION_SAMPLE'))
+) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_0900_ai_ci;
+
+create table if not exists evaluation_run_metric (
+    id varchar(80) not null,
+    run_id varchar(80) not null,
+    metric_name varchar(120) not null,
+    metric_value double not null,
+    metric_unit varchar(40) not null,
+    sample_count int not null,
+    metric_json text,
+    created_at datetime(6) not null,
+    primary key (id),
+    unique key uk_evaluation_run_metric_run_name (run_id, metric_name),
+    key idx_evaluation_run_metric_run (run_id),
+    key idx_evaluation_run_metric_name (metric_name),
+    constraint fk_evaluation_run_metric_run foreign key (run_id) references evaluation_run(id),
+    constraint ck_evaluation_run_metric_sample_count check (sample_count > 0)
+) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_0900_ai_ci;

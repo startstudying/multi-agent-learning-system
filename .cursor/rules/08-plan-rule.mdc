@@ -1,0 +1,24 @@
+---
+description: Create implementation plans with file changes, risks, and sequencing.
+globs:
+  - "docs/plans/**"
+alwaysApply: false
+---
+
+# Plan Rule
+
+Write PLAN in **Chinese**.
+
+Create PLAN documents under `docs/plans/` using `PLAN-TEMPLATE.md`.
+
+PLAN must include:
+
+- Implementation phases
+- Files to create or modify
+- Dependencies and prerequisites
+- Risk assessment
+- Rollback strategy
+- Test strategy
+- Estimated task breakdown preview
+
+PLAN must be derived from an approved SPEC. Do not plan implementation for un-specced features.

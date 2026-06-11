@@ -1,0 +1,23 @@
+---
+description: Break plans into single-focus tasks with clear done criteria.
+globs:
+  - "docs/tasks/**"
+alwaysApply: false
+---
+
+# Task Breakdown Rule
+
+Write TASK and Context Pack in **Chinese**.
+
+Create TASK documents under `docs/tasks/` using `TASK-TEMPLATE.md`.
+
+Each TASK must:
+
+- Address exactly one focused unit of work
+- List done criteria
+- Reference parent PLAN and SPEC
+- Define files allowed to modify
+- Define test commands to run
+- Be implementable in a single session
+
+Implement only one TASK at a time unless worktree-based parallel execution is explicitly approved in the Context Pack.

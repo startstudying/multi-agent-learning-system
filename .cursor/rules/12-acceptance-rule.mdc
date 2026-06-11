@@ -1,0 +1,25 @@
+---
+description: Require evidence and acceptance reports before marking features done.
+globs:
+  - "docs/evidence/**"
+  - "docs/acceptance/**"
+alwaysApply: false
+---
+
+# Acceptance Rule
+
+Write Evidence and Acceptance reports in **Chinese**.
+
+After implementation and testing:
+
+1. Create evidence document under `docs/evidence/` using `EVIDENCE-TEMPLATE.md`.
+2. Create acceptance report under `docs/acceptance/` using `ACCEPT-TEMPLATE.md`.
+3. Update `docs/changelog/CHANGELOG.md`.
+4. Update project memory.
+
+A feature is not done without:
+
+- Evidence of tests run (or explained limitation)
+- Acceptance checklist completed
+- Changelog entry
+- Memory update

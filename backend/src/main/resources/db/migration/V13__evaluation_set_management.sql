@@ -1,0 +1,42 @@
+create table if not exists evaluation_set (
+    id varchar(80) not null,
+    code varchar(120) not null,
+    version varchar(80) not null,
+    name varchar(255) not null,
+    description text,
+    set_type varchar(40) not null,
+    status varchar(40) not null,
+    course_id varchar(80),
+    kb_id varchar(80),
+    prompt_code varchar(120),
+    prompt_version varchar(120),
+    created_by varchar(120) not null,
+    created_at datetime(6) not null,
+    updated_at datetime(6) not null,
+    deleted_at datetime(6),
+    primary key (id),
+    unique key uk_evaluation_set_owner_code_version (created_by, code, version),
+    key idx_evaluation_set_type (set_type),
+    key idx_evaluation_set_created_by (created_by),
+    key idx_evaluation_set_course (course_id),
+    key idx_evaluation_set_kb (kb_id),
+    constraint ck_evaluation_set_type check (set_type in ('RAG_QUESTION', 'GRADING_SAMPLE', 'RESOURCE_GENERATION_SAMPLE')),
+    constraint ck_evaluation_set_status check (status in ('DRAFT', 'ACTIVE', 'ARCHIVED'))
+) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_0900_ai_ci;
+
+create table if not exists evaluation_sample (
+    id varchar(80) not null,
+    set_id varchar(80) not null,
+    sample_type varchar(40) not null,
+    sample_key varchar(120),
+    input_json text not null,
+    expected_json text not null,
+    metadata_json text,
+    created_at datetime(6) not null,
+    updated_at datetime(6) not null,
+    primary key (id),
+    key idx_evaluation_sample_set (set_id),
+    key idx_evaluation_sample_type (sample_type),
+    constraint fk_evaluation_sample_set foreign key (set_id) references evaluation_set(id),
+    constraint ck_evaluation_sample_type check (sample_type in ('RAG_QUESTION', 'GRADING_SAMPLE', 'RESOURCE_GENERATION_SAMPLE'))
+) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_0900_ai_ci;

@@ -1,0 +1,26 @@
+---
+description: Write PRD with MVP scope, non-goals, and product decisions before requirements.
+globs:
+  - "docs/product/**"
+alwaysApply: false
+---
+
+# Product Decision Rule
+
+Write PRD in **Chinese** (正文中文；API 路径、字段名、代码标识符可保留英文).
+
+Before writing REQ or SPEC, create or update a PRD under `docs/product/`.
+
+PRD must include:
+
+- Problem statement
+- Target users
+- User stories
+- MVP scope
+- Non-goals (explicit out-of-scope items)
+- Success metrics
+- Open questions
+
+Product decisions that affect architecture must be recorded in `docs/decisions/` as ADR.
+
+Do not implement features outside MVP scope without updating the PRD first.

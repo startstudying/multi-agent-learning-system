@@ -1,0 +1,37 @@
+spring:
+  config:
+    activate:
+      on-profile: test
+  datasource:
+    url: jdbc:h2:mem:learning_os_test;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: none
+  flyway:
+    enabled: false
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      repositories:
+        enabled: false
+
+learning-os:
+  app:
+    environment: test
+  rag:
+    parser:
+      ocr:
+        enabled: false
+        provider: none
+        process:
+          command: ""
+          timeout: 1s
+          max-output-chars: 200000
+    index-worker:
+      enabled: false
+  ai-model:
+    provider: none

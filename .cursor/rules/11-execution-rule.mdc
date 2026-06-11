@@ -1,0 +1,21 @@
+---
+description: Enforce disciplined single-task implementation within Context Pack boundaries.
+globs:
+  - "backend/**"
+  - "frontend/**"
+alwaysApply: true
+---
+
+# Execution Rule
+
+During implementation:
+
+- Implement only one TASK at a time.
+- Modify only files listed in the Context Pack.
+- Do not rewrite large modules without approval.
+- Do not change API contracts without updating specs.
+- Do not change database schema without updating specs.
+- Do not introduce new dependencies without dependency review.
+- Run tests when possible; explain clearly if tests cannot be run.
+
+After implementation, proceed to Integration Review before marking the task complete.

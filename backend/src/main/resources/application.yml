@@ -1,0 +1,116 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: learning-os-backend
+  ai:
+    model:
+      chat: ${SPRING_AI_MODEL_CHAT:${AI_MODEL_PROVIDER:none}}
+      embedding: ${SPRING_AI_MODEL_EMBEDDING:${AI_MODEL_PROVIDER:none}}
+      image: ${SPRING_AI_MODEL_IMAGE:none}
+      audio:
+        speech: ${SPRING_AI_MODEL_AUDIO_SPEECH:none}
+        transcription: ${SPRING_AI_MODEL_AUDIO_TRANSCRIPTION:none}
+      moderation: ${SPRING_AI_MODEL_MODERATION:none}
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+      chat:
+        options:
+          model: ${AI_CHAT_MODEL:}
+      embedding:
+        options:
+          model: ${AI_EMBEDDING_MODEL:}
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/learning_os?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    driver-class-name: ${DB_DRIVER:com.mysql.cj.jdbc.Driver}
+    username: ${DB_USERNAME:}
+    password: ${DB_PASSWORD:}
+    hikari:
+      connection-timeout: ${DB_CONNECTION_TIMEOUT:1000}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  data:
+    redis:
+      host: ${REDIS_HOST:}
+      port: ${REDIS_PORT:6379}
+      timeout: ${REDIS_TIMEOUT:1s}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:1s}
+      repositories:
+        enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+learning-os:
+  app:
+    environment: ${APP_ENV:dev}
+    trace-header: X-Trace-Id
+  auth:
+    jwt-secret: ${AUTH_JWT_SECRET:}
+    issuer: ${AUTH_JWT_ISSUER:learning-os}
+    jwk-set-uri: ${AUTH_JWK_SET_URI:}
+    audience: ${AUTH_JWT_AUDIENCE:}
+    dev-header-fallback-enabled: ${AUTH_DEV_HEADER_FALLBACK_ENABLED:true}
+  storage:
+    endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+    access-key: ${MINIO_ACCESS_KEY:}
+    secret-key: ${MINIO_SECRET_KEY:}
+    bucket: ${MINIO_BUCKET:learning-os-documents}
+  rag:
+    default-top-k: ${RAG_DEFAULT_TOP_K:20}
+    max-context-tokens: ${RAG_MAX_CONTEXT_TOKENS:6000}
+    reranker-timeout-ms: ${RAG_RERANKER_TIMEOUT_MS:2000}
+    vector:
+      enabled: ${RAG_VECTOR_ENABLED:false}
+      provider: ${RAG_VECTOR_PROVIDER:none}
+      qdrant:
+        host: ${RAG_VECTOR_QDRANT_HOST:}
+        port: ${RAG_VECTOR_QDRANT_PORT:6334}
+        use-tls: ${RAG_VECTOR_QDRANT_USE_TLS:false}
+        api-key: ${RAG_VECTOR_QDRANT_API_KEY:}
+        collection-name: ${RAG_VECTOR_QDRANT_COLLECTION:learning_os_chunks}
+        initialize-schema: ${RAG_VECTOR_QDRANT_INITIALIZE_SCHEMA:false}
+        timeout: ${RAG_VECTOR_QDRANT_TIMEOUT:2s}
+        expected-dimension: ${RAG_VECTOR_QDRANT_EXPECTED_DIMENSION:0}
+    parser:
+      ocr:
+        enabled: ${RAG_PARSER_OCR_ENABLED:false}
+        provider: ${RAG_PARSER_OCR_PROVIDER:none}
+        process:
+          command: ${RAG_PARSER_OCR_PROCESS_COMMAND:}
+          timeout: ${RAG_PARSER_OCR_PROCESS_TIMEOUT:10s}
+          max-output-chars: ${RAG_PARSER_OCR_PROCESS_MAX_OUTPUT_CHARS:200000}
+    index-recovery:
+      enabled: ${RAG_INDEX_RECOVERY_ENABLED:true}
+      run-on-startup: ${RAG_INDEX_RECOVERY_RUN_ON_STARTUP:true}
+      running-timeout: ${RAG_INDEX_RECOVERY_RUNNING_TIMEOUT:30m}
+      fixed-delay: ${RAG_INDEX_RECOVERY_FIXED_DELAY:5m}
+    index-worker:
+      enabled: ${RAG_INDEX_WORKER_ENABLED:true}
+      fixed-delay: ${RAG_INDEX_WORKER_FIXED_DELAY:5s}
+      batch-size: ${RAG_INDEX_WORKER_BATCH_SIZE:2}
+      lease-duration: ${RAG_INDEX_WORKER_LEASE_DURATION:2m}
+      retry-backoff: ${RAG_INDEX_WORKER_RETRY_BACKOFF:30s}
+      max-retry-count: ${RAG_INDEX_WORKER_MAX_RETRY_COUNT:2}
+  ai-model:
+    provider: ${AI_MODEL_PROVIDER:none}
+    chat-model: ${AI_CHAT_MODEL:}
+    embedding-model: ${AI_EMBEDDING_MODEL:}
+  model-provider:
+    encryption-key: ${MODEL_PROVIDER_ENCRYPTION_KEY:}
+  token-budget:
+    enforcement-enabled: ${TOKEN_BUDGET_ENFORCEMENT_ENABLED:true}
+    daily-limit: ${TOKEN_BUDGET_DAILY_LIMIT:10000}
+  ops-alert:
+    persistence-enabled: ${OPS_ALERT_PERSISTENCE_ENABLED:true}
+    webhook-enabled: ${OPS_ALERT_WEBHOOK_ENABLED:false}
+    webhook-url: ${OPS_ALERT_WEBHOOK_URL:}

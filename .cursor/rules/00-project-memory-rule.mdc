@@ -1,0 +1,25 @@
+---
+description: Read and update project memory before and after every task.
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# Project Memory Rule
+
+Before any task:
+
+1. Read `AGENTS.md`.
+2. Read `docs/memory/PROJECT_MEMORY.md`.
+3. Read related domain memory files under `docs/memory/`.
+4. Read related specs under `docs/specs/`.
+5. Read related decisions under `docs/decisions/`.
+
+After any task:
+
+1. Update `docs/memory/PROJECT_MEMORY.md` with completed/in-progress status.
+2. Update the relevant domain memory file (frontend, backend, agent/rag, database, API).
+3. Update `docs/changelog/CHANGELOG.md`.
+4. Update related PRD / REQ / SPEC / PLAN / TASK / ACCEPT documents.
+
+Never store secrets, API keys, credentials, raw logs, or sensitive personal data in memory files.

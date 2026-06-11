@@ -1,0 +1,25 @@
+---
+description: Spring Boot backend layering, API design, and service conventions.
+globs:
+  - "backend/**"
+alwaysApply: false
+---
+
+# Backend Rule
+
+Tech stack: Java 21 + Spring Boot 3.x + Spring AI + MySQL 8.x.
+
+Layering:
+
+Controller → Application Service → Domain Service / Agent Orchestrator → Tool → Service → Mapper / Repository → Database
+
+Rules:
+
+- Backend owns all AI API calls.
+- Permission checks in backend code, never in Prompt.
+- API contracts must match `docs/specs/` and `docs/memory/API_MEMORY.md`.
+- Database changes require SPEC update and migration.
+- Use traceId for important operations.
+- Global exception handler for consistent error responses.
+
+Read `docs/memory/BACKEND_MEMORY.md` before backend tasks.

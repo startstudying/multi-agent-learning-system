@@ -1,0 +1,35 @@
+---
+description: Enforce the full Spec-first development workflow from request to retrospective.
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# Development Workflow Rule
+
+Never start coding directly from a user request.
+
+Required workflow:
+
+User Request
+→ Project Memory
+→ Skill Selection Gate
+→ Multi-Expert Subagent Gate
+→ GitHub Reference Gate (if needed)
+→ PRD
+→ REQ
+→ SPEC
+→ PLAN
+→ TASK
+→ Context Pack
+→ Parallel / Single Task Execution
+→ Integration Review
+→ Test
+→ Evidence
+→ Acceptance
+→ Changelog
+→ Memory Update
+→ Retrospective
+→ Skill Extraction
+
+Skip no step unless explicitly documented in the TASK with justification.

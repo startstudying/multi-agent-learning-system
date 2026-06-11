@@ -1,0 +1,24 @@
+---
+description: Vue 3 frontend conventions for AI learning platform UI.
+globs:
+  - "frontend/**"
+alwaysApply: false
+---
+
+# Frontend Rule
+
+Tech stack: Vue 3 + TypeScript + Vite + Pinia + Vue Router.
+
+Rules:
+
+- Frontend cannot call LLM APIs directly.
+- Frontend cannot store API keys.
+- API calls must use shared request wrapper.
+- AI streaming must use SSE wrapper.
+- Components must handle loading, error, empty, and disabled states.
+- Use composables for reusable AI interaction logic.
+- Page-level state via Pinia; component-local state via ref/reactive.
+
+Read `docs/memory/FRONTEND_MEMORY.md` before frontend tasks.
+
+See `docs/skills/project-specific/vue-ai-learning-ui.md` for AI UI patterns.

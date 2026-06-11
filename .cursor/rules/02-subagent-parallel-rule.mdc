@@ -1,0 +1,50 @@
+---
+description: Use multi-expert subagents for complex cross-module tasks, but prevent uncontrolled parallel edits.
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# Multi-Expert Subagent Rule
+
+Main Codex = orchestrator / integrator / final decision.
+Subagents = expert parallel analysis, design, review; isolated implementation only when approved.
+
+Before implementing a complex task, decide whether subagents are needed.
+
+## When To Enable
+
+| Scope | Rule |
+|---|---|
+| 1 module | Default single Codex |
+| 2 modules | May enable relevant experts (analysis only) |
+| 3+ modules | Must enable Multi-Expert Subagent |
+| Agent/RAG | Must enable Agent/RAG Expert |
+| Security / DB / dependency | Must enable Security & Quality |
+| Frontend + backend API | Must enable Frontend + Backend + Integration Reviewer |
+
+Use subagents if the task touches two or more of: frontend, backend, database, agent, rag, security, architecture, testing.
+
+Not for: copy tweaks, single style fix, one field, simple validation, README one-liner.
+
+## Parallelism Levels
+
+- Level 1 — Parallel Analysis (safest, default for medium/large)
+- Level 2 — Parallel Design (merge via Integration Reviewer)
+- Level 3 — Parallel Implementation (rare: independent worktree, no file overlap, Context Pack ownership)
+
+Analysis and design may run in parallel. Coding defaults to single-task.
+
+Parallel implementation only if:
+
+- tasks are independent
+- allowed files listed in Context Pack
+- no file overlap
+- isolated branch or worktree per subagent
+- Integration Reviewer merges and reviews final diff
+
+For small tasks, use a single Codex flow.
+
+Never allow multiple subagents to modify the same file without explicit integration planning.
+
+Save reports under `docs/subagents/runs/RUN-YYYYMMDD-feature-name.md`.

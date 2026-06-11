@@ -1,0 +1,54 @@
+---
+description: Automatically treat raw user requirements as controlled feature-development tasks using Project Memory, Skill Selection, Subagent Gate, Spec-first docs, Context Pack, implementation, evidence, acceptance, and memory update.
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# Auto Feature Intake Rule
+
+When the user provides a raw requirement, do not implement directly.
+
+Automatically apply this workflow:
+
+```text
+Raw Requirement
+→ Project Memory
+→ Skill Selection Gate
+→ Multi-Expert Subagent Gate
+→ GitHub Reference Gate if needed
+→ PRD
+→ REQ
+→ SPEC
+→ PLAN
+→ TASK
+→ Context Pack
+→ Parallel / Single Task Execution
+→ Integration Review
+→ Test
+→ Evidence
+→ Acceptance
+→ Changelog
+→ Memory Update
+→ Skill Extraction
+```
+
+If required documents are missing, create them first.
+
+Do not ask the user to repeat the standard workflow prompt.
+
+The user should only need to provide the requirement.
+
+Invoke the `feature-development-workflow` skill from `.agents/skills/feature-development-workflow/SKILL.md`.
+
+Subagent gate rules:
+
+- 1 module: single Codex (no subagents)
+- 2 modules: may use experts for parallel analysis (L1)
+- 3+ modules: must use Multi-Expert Subagent
+- Agent/RAG: must include Agent/RAG Expert
+- Security/DB/dependency: must include Security & Quality
+
+Parallelism: L1 analysis and L2 design allowed; L3 implementation only with worktree + no file overlap.
+
+For small tasks (copy, style, one field): single Codex, no subagents.

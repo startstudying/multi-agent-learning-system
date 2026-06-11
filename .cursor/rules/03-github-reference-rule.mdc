@@ -1,0 +1,26 @@
+---
+description: Search GitHub for reference patterns when no existing skill or rule fits.
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# GitHub Reference Gate
+
+Trigger this gate when:
+
+- No existing skill fits the task
+- Architecture pattern is unfamiliar
+- A new dependency or framework is being considered
+
+Required steps:
+
+1. Identify the missing capability.
+2. Search GitHub for strong references.
+3. Review popular repositories, file structures, workflows, and rules.
+4. Summarize useful patterns in `docs/research/github-references/` using `REF-TEMPLATE.md`.
+5. Create or update a project-specific skill under `docs/skills/project-specific/`.
+6. Continue the normal PRD → REQ → SPEC → PLAN → TASK workflow.
+
+Never copy code blindly from GitHub.
+Never add a dependency only because a GitHub project uses it.

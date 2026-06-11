@@ -1,0 +1,25 @@
+---
+description: Review security and dependencies before adding packages or handling sensitive data.
+globs:
+  - "**/pom.xml"
+  - "**/package.json"
+  - "docs/security/**"
+alwaysApply: true
+---
+
+# Security / Dependency Gate
+
+Before adding any new dependency:
+
+1. Create a review under `docs/security/` using `DEPENDENCY_REVIEW_TEMPLATE.md`.
+2. Document why the dependency is needed.
+3. Check license, security advisories, and maintenance status.
+
+Security rules:
+
+- Never commit API keys, secrets, or credentials.
+- Frontend cannot store API keys.
+- Frontend cannot call LLM APIs directly.
+- Permission cannot rely on Prompt.
+- Sensitive data cannot enter Prompt without explicit approval.
+- Read `docs/security/SECRET_POLICY.md` and `docs/security/AI_TOOL_SECURITY.md`.

@@ -1,0 +1,25 @@
+---
+description: Select relevant skills before writing docs or code; do not load all skills at once.
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# Skill Selection Gate
+
+Before writing PRD, REQ, SPEC, PLAN, TASK, or code, perform Skill Selection.
+
+For every request, output:
+
+1. Task type
+2. Selected skills (from `docs/skills/SKILL_REGISTRY.md`)
+3. Why each skill is selected
+4. Missing skills, if any
+5. Whether GitHub research is needed
+6. New project-specific skill to create, if needed
+
+Read only the selected skill documents. Do not load all skills at once.
+
+If a project-specific skill exists under `docs/skills/project-specific/`, prefer it over generic guidance.
+
+If no skill fits, trigger GitHub Reference Gate before proceeding.

@@ -1,0 +1,23 @@
+---
+description: Create Context Pack before implementation to bound scope and file access.
+globs:
+  - "docs/context/**"
+alwaysApply: false
+---
+
+# Context Pack Rule
+
+Before implementation, create a Context Pack under `docs/context/` using `CONTEXT-PACK-TEMPLATE.md`.
+
+Context Pack must define:
+
+- Current TASK
+- Related memory and docs
+- Selected skills
+- Subagent plan (if any)
+- Files allowed to modify
+- Files not allowed to modify
+- Test commands
+- Task boundary
+
+Do not modify files outside the Context Pack without updating the Context Pack and TASK first.

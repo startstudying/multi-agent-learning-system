@@ -1,0 +1,29 @@
+---
+description: Agent orchestration, Tool calling, RAG, Trace, and citation rules.
+globs:
+  - "backend/**/agent/**"
+  - "backend/**/rag/**"
+  - "backend/**/orchestrator/**"
+alwaysApply: false
+---
+
+# Agent / RAG Rule
+
+Agent rules:
+
+- Agent Tool cannot call Mapper or Repository directly; must call Service.
+- Agent execution must write trace (see `docs/skills/project-specific/agent-trace-design.md`).
+- Agent loops must have max round limits.
+- Model output must be validated before persistence.
+- AI-generated resources must have review status.
+
+RAG rules:
+
+- RAG answers must include citation sources.
+- Retrieval must enforce permission filtering.
+- Context must be trimmed to token budget.
+- Citation display follows `docs/skills/project-specific/rag-citation-viewer.md`.
+
+Read `docs/memory/AGENT_RAG_MEMORY.md` before agent/RAG tasks.
+
+See `docs/skills/project-specific/spring-ai-agent-tool.md` for Tool implementation patterns.
