@@ -14,6 +14,8 @@
 | MySQL migration smoke 对齐最新迁移 | PASS | `MysqlMigrationSmokeTest` latest version/count 更新为 V22 / 22，并断言 V21/V22 对象 |
 | 默认测试不外连 | PASS | external smoke 和 MySQL smoke 默认 skipped |
 | 相邻后端测试 | PASS | 56 run, 0 failures, 0 errors, 3 skipped |
+| 全量后端测试 | PASS | 627 run, 0 failures, 0 errors, 3 skipped |
+| 前端测试 | PASS | 31 passed |
 
 ## 限制
 

@@ -29,10 +29,12 @@ public class EvaluationSetService {
     private static final String TYPE_RAG_QUESTION = "RAG_QUESTION";
     private static final String TYPE_GRADING_SAMPLE = "GRADING_SAMPLE";
     private static final String TYPE_RESOURCE_GENERATION_SAMPLE = "RESOURCE_GENERATION_SAMPLE";
+    private static final String TYPE_AI_QA_ANSWER = "AI_QA_ANSWER";
     private static final List<String> ALLOWED_TYPES = List.of(
             TYPE_RAG_QUESTION,
             TYPE_GRADING_SAMPLE,
-            TYPE_RESOURCE_GENERATION_SAMPLE
+            TYPE_RESOURCE_GENERATION_SAMPLE,
+            TYPE_AI_QA_ANSWER
     );
     private static final List<String> ALLOWED_STATUSES = List.of("DRAFT", "ACTIVE", "ARCHIVED");
     private static final String DEFAULT_STATUS = "DRAFT";
@@ -147,6 +149,8 @@ public class EvaluationSetService {
             case TYPE_RESOURCE_GENERATION_SAMPLE -> notBlank(sample.learnerProfileSnapshot())
                     && notBlank(sample.learningGoal())
                     && notBlank(sample.expectedResourceType());
+            case TYPE_AI_QA_ANSWER -> notBlank(sample.question())
+                    && !normalizedList(sample.qualityCriteria()).isEmpty();
             default -> false;
         };
         if (!valid) {
@@ -158,6 +162,10 @@ public class EvaluationSetService {
         Map<String, Object> input = new LinkedHashMap<>();
         switch (type) {
             case TYPE_RAG_QUESTION -> {
+                input.put("question", sample.question().trim());
+                input.put("topK", sample.topK());
+            }
+            case TYPE_AI_QA_ANSWER -> {
                 input.put("question", sample.question().trim());
                 input.put("topK", sample.topK());
             }
@@ -179,6 +187,7 @@ public class EvaluationSetService {
         Map<String, Object> expected = new LinkedHashMap<>();
         switch (type) {
             case TYPE_RAG_QUESTION -> expected.put("expectedSourceIds", normalizedList(sample.expectedSourceIds()));
+            case TYPE_AI_QA_ANSWER -> expected.put("expectedSourceIds", normalizedList(sample.expectedSourceIds()));
             case TYPE_GRADING_SAMPLE -> expected.put("humanScore", sample.humanScore());
             case TYPE_RESOURCE_GENERATION_SAMPLE -> expected.put("expectedResourceType", sample.expectedResourceType().trim());
             default -> throw new ApiException(ErrorCode.VALIDATION_ERROR, "Evaluation set type is invalid");
@@ -293,7 +302,7 @@ public class EvaluationSetService {
         String normalized = requiredTrimmed(type, "Evaluation set type is required").toUpperCase(Locale.ROOT);
         if (!ALLOWED_TYPES.contains(normalized)) {
             throw new ApiException(ErrorCode.VALIDATION_ERROR,
-                    "Evaluation set type must be RAG_QUESTION, GRADING_SAMPLE, or RESOURCE_GENERATION_SAMPLE");
+                    "Evaluation set type must be RAG_QUESTION, GRADING_SAMPLE, RESOURCE_GENERATION_SAMPLE, or AI_QA_ANSWER");
         }
         return normalized;
     }

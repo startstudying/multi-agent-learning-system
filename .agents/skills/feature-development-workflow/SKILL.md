@@ -27,20 +27,19 @@ For every user requirement, follow this order:
 User Requirement
 → Read Project Memory
 → Skill Selection Gate
-→ Size Classification Gate (S / M / L)
+→ Size Classification Gate (XS / S / M / L)
 → Multi-Expert Subagent Gate (size-aware)
 → GitHub Reference Gate if needed
 → Size-specific documents
-   S: mini TASK with embedded Context Pack; combined Evidence/Acceptance
-   M: REQ / SPEC / PLAN / TASK / Context Pack; PRD only if product behavior changes
+   XS: no pre-implementation docs; focused verification; final response record
+   S: single TASK with embedded Context Pack, Evidence, and Acceptance
+   M: SPEC / TASK / Context Pack by default; REQ / PLAN / PRD only when triggered
    L: PRD / REQ / SPEC / PLAN / TASK / Context Pack
 → Parallel / Single Task Execution
-→ Integration Review
+→ Integration Review when risk or subagents justify it
 → Test
-→ Evidence
-→ Acceptance
-→ Changelog
-→ Memory Update
+→ Evidence / Acceptance according to size
+→ Changelog / Memory Update according to size
 → Retrospective / Skill Extraction if required by size or useful
 ```
 
@@ -48,18 +47,19 @@ The workflow is mandatory, but the document depth is size-specific. Do not force
 
 ## Step 1: Read Project Memory
 
-Read:
+Read according to size and risk:
 
-- `AGENTS.md`
-- `.cursor/rules/*`
-- `docs/memory/PROJECT_MEMORY.md`
-- Related files under `docs/memory/`
-- `docs/skills/SKILL_REGISTRY.md`
-- `docs/subagents/SUBAGENT_REGISTRY.md`
+- XS: read the directly affected files and use focused search; read memory only when the patch touches a remembered decision or long-lived behavior.
+- S: read `AGENTS.md`, `docs/memory/PROJECT_MEMORY.md`, `docs/skills/SKILL_REGISTRY.md`, and any one directly related memory/spec/rule file.
+- M/L: read `AGENTS.md`, relevant `.cursor/rules/*`, `docs/memory/PROJECT_MEMORY.md`, related files under `docs/memory/`, `docs/skills/SKILL_REGISTRY.md`, and `docs/subagents/SUBAGENT_REGISTRY.md`.
 
 ## Step 2: Skill Selection Gate
 
-Before writing any PRD, REQ, SPEC, PLAN, TASK, or code, output:
+Before writing any PRD, REQ, SPEC, PLAN, TASK, or code, output skill selection at the depth justified by size:
+
+- XS: one concise sentence is enough.
+- S: short report with task type, selected skills, missing skills, and GitHub research decision.
+- M/L: full report:
 
 ```md
 # Skill Selection Report
@@ -88,8 +88,9 @@ Before creating documents or using subagents, classify the task:
 
 | Size | Use When | Required Documents Before Code |
 |---|---|---|
-| S - Small Slice / Fast Lane | One bounded module or narrow cleanup; no public API/DTO/schema/dependency/frontend-backend contract change; usually <=3 production files; focused/adjacent tests sufficient | One mini `docs/tasks/TASK-YYYYMMDD-parent-id-semantic-slug.md` with embedded Context Pack |
-| M - Standard Feature Slice | One substantial module or two related modules; visible behavior or integration risk; not a broad architecture initiative | `REQ`, `SPEC`, `PLAN`, `TASK`, standalone `CONTEXT`; `PRD` only if product/user behavior changes |
+| XS - Patch Lane | One file or a very small set of tightly related docs/config/test-only files; no API/DTO/schema/dependency/frontend-backend contract/Agent/RAG/security/model-provider risk; focused verification sufficient | No pre-implementation workflow document; final response records verification |
+| S - Small Slice / Fast Lane | One bounded module or narrow cleanup; no public API/DTO/schema/dependency/frontend-backend contract change; usually <=3 production files; focused/adjacent tests sufficient | One `docs/tasks/TASK-YYYYMMDD-parent-id-semantic-slug.md` with embedded Context Pack, Evidence, and Acceptance |
+| M - Standard Feature Slice | One substantial module or two related modules; visible behavior or integration risk; not a broad architecture initiative | `SPEC`, `TASK`, standalone `CONTEXT` by default; add `REQ`, `PLAN`, or `PRD` only when triggered |
 | L - Large Feature / Architecture Change | New product capability, frontend+backend linkage, DB/schema, dependency, Agent/RAG workflow, security architecture, or 3+ modules | Full `PRD`, `REQ`, `SPEC`, `PLAN`, `TASK`, standalone `CONTEXT` |
 
 Output:
@@ -97,7 +98,7 @@ Output:
 ```md
 ## Size Classification
 
-Size: S / M / L
+Size: XS / S / M / L
 Reason:
 Required Documents:
 Can Skip:
@@ -105,6 +106,8 @@ Upgrade Trigger:
 ```
 
 If a task grows beyond the selected size, stop, reclassify, and create the missing documents before continuing.
+
+XS must upgrade to S or higher if it touches production behavior beyond the local patch, needs more than one edit/verify loop to understand, or reveals API/DB/Agent/RAG/security/dependency risk.
 
 ### Epic / Parent-Child Naming
 
@@ -187,25 +190,30 @@ All workflow documents must be written in **Chinese** (正文中文；API/JSON/S
 
 Create or update only the documents required by the selected size.
 
+XS:
+
+```text
+No pre-implementation workflow document.
+Final response records files changed, verification, and residual risk.
+```
+
 S:
 
 ```text
 docs/tasks/TASK-YYYYMMDD-parent-id-semantic-slug.md
 ```
 
-The S mini TASK must include goal, task type, selected skills, size decision, related memory/docs, allowed files, disallowed files, test commands, acceptance criteria, and current boundary.
+The S TASK must include goal, task type, selected skills, size decision, related memory/docs, allowed files, disallowed files, test commands, current boundary, evidence, acceptance criteria, and acceptance verdict.
 
 M:
 
 ```text
-docs/requirements/REQ-YYYYMMDD-feature-name.md
 docs/specs/SPEC-YYYYMMDD-feature-name.md
-docs/plans/PLAN-YYYYMMDD-feature-name.md
 docs/tasks/TASK-YYYYMMDD-feature-name.md
 docs/context/CONTEXT-YYYYMMDD-feature-name.md
 ```
 
-Add `docs/product/PRD-YYYYMMDD-feature-name.md` for M only when product/user behavior changes.
+For M, add `docs/requirements/REQ-YYYYMMDD-feature-name.md` only when requirement boundaries are unclear, add `docs/plans/PLAN-YYYYMMDD-feature-name.md` only for multi-step or cross-module sequencing, and add `docs/product/PRD-YYYYMMDD-feature-name.md` only when product/user behavior changes.
 
 L:
 
@@ -218,7 +226,7 @@ docs/tasks/TASK-YYYYMMDD-feature-name.md
 docs/context/CONTEXT-YYYYMMDD-feature-name.md
 ```
 
-Do not implement until the required documents for the selected size exist.
+Do not implement until the required documents for the selected size exist. XS is the only lane with no pre-implementation workflow document.
 
 ## Step 6: Implementation
 
@@ -231,6 +239,7 @@ Follow Context Pack restrictions:
 - Do not add dependencies without dependency review.
 - Do not change API contracts without SPEC update.
 - Do not change database schema without SPEC update.
+- For XS, modify only the directly identified files named in the working notes/final response.
 
 ## Step 7: Test and Evidence
 
@@ -238,10 +247,12 @@ Run tests when possible.
 
 Create records according to task size.
 
-S may use one combined evidence/acceptance document:
+XS records verification in the final response only.
+
+S records evidence and acceptance inside the TASK file:
 
 ```text
-docs/evidence/EVIDENCE-YYYYMMDD-parent-id-semantic-slug.md
+docs/tasks/TASK-YYYYMMDD-parent-id-semantic-slug.md
 ```
 
 M/L should create:
@@ -255,13 +266,11 @@ If tests cannot run, explain why.
 
 ## Step 8: Update Memory
 
-After implementation, update:
+After implementation, update according to size:
 
-- `docs/changelog/CHANGELOG.md`
-- `docs/memory/PROJECT_MEMORY.md`
-- Related memory files
-- Related documents required by the selected size
-- Skill Registry if new skills were added
+- XS: no changelog/memory update by default.
+- S: update TASK evidence/acceptance; update changelog/memory only when behavior, workflow, or project decisions changed.
+- M/L: update `docs/changelog/CHANGELOG.md`, `docs/memory/PROJECT_MEMORY.md`, related memory files, related documents required by the selected size, and Skill Registry if new skills were added.
 
 ## Architecture Rules
 
@@ -287,7 +296,11 @@ Always:
 
 ## Final Output Format
 
-At the end, output:
+At the end, output at the depth justified by size:
+
+- XS: summary, files modified, verification performed, remaining risk.
+- S: summary, TASK updated, files modified, verification/evidence, acceptance verdict, memory/changelog update decision.
+- M/L: full development summary:
 
 ```md
 # Development Summary

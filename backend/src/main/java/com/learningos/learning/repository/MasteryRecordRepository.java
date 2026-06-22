@@ -1,6 +1,8 @@
 package com.learningos.learning.repository;
 
 import com.learningos.learning.domain.MasteryRecord;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
@@ -11,4 +13,6 @@ public interface MasteryRecordRepository extends JpaRepository<MasteryRecord, St
             String learnerId,
             String knowledgePointId
     );
+
+    Page<MasteryRecord> findByLearnerId(String learnerId, Pageable pageable);
 }

@@ -1,5 +1,5 @@
 ---
-description: Check architecture baseline before and after changes to prevent drift.
+description: Check architecture baseline when size/risk indicates possible drift.
 globs:
   - "backend/**"
   - "frontend/**"
@@ -9,11 +9,13 @@ alwaysApply: true
 
 # Architecture Drift Check
 
-Before and after implementation:
+Run the drift check when changes touch backend/frontend architecture boundaries, Agent/RAG orchestration, permission/security, DB schema, dependencies, deployment topology, API contracts, or model-provider behavior.
 
 1. Read `docs/architecture/ARCHITECTURE_BASELINE.md`.
 2. Run checklist in `docs/architecture/ARCHITECTURE_DRIFT_CHECK.md`.
-3. If drift is detected, document in PLAN or create an ADR under `docs/decisions/`.
+3. If drift is detected, document in PLAN/TASK or create an ADR under `docs/decisions/`.
+
+For XS/S docs-only, copy, style, test-only, or local validation changes with no architecture impact, note that drift check was not required.
 
 Key invariants:
 

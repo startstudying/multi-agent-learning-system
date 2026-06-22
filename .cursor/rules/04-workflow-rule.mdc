@@ -1,5 +1,5 @@
 ---
-description: Enforce the full Spec-first development workflow from request to retrospective.
+description: Enforce the size-aware development workflow from request to verification.
 globs:
   - "**/*"
 alwaysApply: true
@@ -7,29 +7,29 @@ alwaysApply: true
 
 # Development Workflow Rule
 
-Never start coding directly from a user request.
+Never start coding directly from a user request without first classifying size and risk.
 
 Required workflow:
 
 User Request
-→ Project Memory
+→ Project Memory depth by size
 → Skill Selection Gate
-→ Multi-Expert Subagent Gate
-→ GitHub Reference Gate (if needed)
-→ PRD
-→ REQ
-→ SPEC
-→ PLAN
-→ TASK
-→ Context Pack
-→ Parallel / Single Task Execution
-→ Integration Review
-→ Test
-→ Evidence
-→ Acceptance
-→ Changelog
-→ Memory Update
-→ Retrospective
-→ Skill Extraction
+→ Size Classification Gate (XS / S / M / L)
+→ Multi-Expert Subagent Gate when size/risk requires it
+→ GitHub Reference Gate only when no existing skill/rule fits
+→ Size-specific documents
+→ Single / Parallel Task Execution according to Context Pack
+→ Integration Review when risk or subagents justify it
+→ Tests / verification
+→ Evidence / Acceptance according to size
+→ Changelog / Memory Update according to size
+→ Retrospective / Skill Extraction only when useful or required
 
-Skip no step unless explicitly documented in the TASK with justification.
+Size-specific documents:
+
+- XS: no pre-implementation docs; final response records files, verification, and residual risk.
+- S: one TASK with embedded Context Pack, Evidence, and Acceptance.
+- M: SPEC + TASK + Context Pack by default; add REQ, PLAN, or PRD only when triggered.
+- L: full PRD / REQ / SPEC / PLAN / TASK / Context Pack.
+
+Upgrade XS/S when API, DB, dependency, security, Agent/RAG, model-provider, deployment, or frontend/backend contract risk appears.

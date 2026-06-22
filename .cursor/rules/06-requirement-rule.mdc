@@ -1,5 +1,5 @@
 ---
-description: Translate PRD into structured requirements with inputs, outputs, and user flows.
+description: Translate product behavior or unclear requirements into structured requirements.
 globs:
   - "docs/requirements/**"
 alwaysApply: false
@@ -19,6 +19,6 @@ REQ must define:
 - Input / output definitions
 - Edge cases
 - Dependencies on other features
-- Traceability to PRD
+- Traceability to PRD when a PRD exists; otherwise traceability to user request and SPEC/TASK
 
-Do not write SPEC or code until REQ is reviewed against PRD scope.
+Do not write SPEC or code until REQ is reviewed against PRD scope when a PRD exists, or against the user request when no PRD is required by size.

@@ -45,20 +45,19 @@ Automatically invoke the `feature-development-workflow` skill (`.agents/skills/f
 ```text
 Project Memory
 → Skill Selection Gate
-→ Size Classification Gate (S / M / L)
+→ Size Classification Gate (XS / S / M / L)
 → Multi-Expert Subagent Gate (size-aware)
 → GitHub Reference Gate if needed
 → Size-specific documents
-   S: mini TASK with embedded Context Pack; combined Evidence/Acceptance
-   M: REQ / SPEC / PLAN / TASK / Context Pack; PRD only if product behavior changes
+   XS: no pre-implementation docs; focused verification; final response record
+   S: single TASK with embedded Context Pack, Evidence, and Acceptance
+   M: SPEC / TASK / Context Pack by default; REQ / PLAN / PRD only when triggered
    L: PRD / REQ / SPEC / PLAN / TASK / Context Pack
 → Parallel / Single Task Execution
-→ Integration Review
+→ Integration Review when risk or subagents justify it
 → Test
-→ Evidence
-→ Acceptance
-→ Changelog
-→ Memory Update
+→ Evidence / Acceptance according to size
+→ Changelog / Memory Update according to size
 → Retrospective / Skill Extraction if useful
 ```
 
@@ -90,36 +89,32 @@ Every feature must follow this workflow:
 User Request
 → Project Memory
 → Skill Selection Gate
-→ Size Classification Gate (S / M / L)
+→ Size Classification Gate (XS / S / M / L)
 → Multi-Expert Subagent Gate (size-aware)
 → GitHub Reference Gate if needed
 → Size-specific documents
 → Parallel / Single Task Execution
-→ Integration Review
+→ Integration Review when risk or subagents justify it
 → Test
-→ Evidence
-→ Acceptance
-→ Changelog
-→ Memory Update
+→ Evidence / Acceptance according to size
+→ Changelog / Memory Update according to size
 → Retrospective / Skill Extraction if required by size or useful
 
 The workflow is mandatory, but the document depth is size-specific. Do not force small slices through the full large-feature document set.
 
 ## Project Memory Rule
 
-Before any task, read:
+Before any task, read only the amount of memory justified by size:
 
-- `docs/memory/PROJECT_MEMORY.md`
-- Related memory files under `docs/memory/`
-- Related specs under `docs/specs/`
-- Related decisions under `docs/decisions/`
+- XS: focused search/read of directly affected files; read memory only when the patch touches a remembered decision or long-lived behavior.
+- S: quick read of `docs/memory/PROJECT_MEMORY.md` plus the one related domain memory/spec when relevant.
+- M/L: read `docs/memory/PROJECT_MEMORY.md`, related domain memory files, related specs, and related decisions.
 
-After any task, update:
+After any task, update only durable records justified by size:
 
-- `docs/memory/PROJECT_MEMORY.md`
-- Related domain memory file
-- `docs/changelog/CHANGELOG.md`
-- Related PRD / REQ / SPEC / PLAN / TASK / ACCEPT files required by the task size
+- XS: no memory/changelog update by default; mention verification in the final response.
+- S: update the TASK evidence/acceptance; update changelog/memory only when behavior, workflow, or project decisions changed.
+- M/L: update `docs/memory/PROJECT_MEMORY.md`, related domain memory, `docs/changelog/CHANGELOG.md`, and related PRD / REQ / SPEC / PLAN / TASK / ACCEPT documents required by the task size.
 
 Do not store secrets, API keys, private credentials, raw logs, or sensitive personal data in memory files.
 
@@ -127,7 +122,13 @@ Do not store secrets, API keys, private credentials, raw logs, or sensitive pers
 
 Before writing PRD, REQ, SPEC, PLAN, TASK, or code, select relevant skills.
 
-For every request, output:
+Output depth is size-aware:
+
+- XS: one concise sentence is enough.
+- S: short report with task type, selected skills, GitHub research decision, and missing skills.
+- M/L: full report.
+
+For M/L, output:
 
 1. Task type
 2. Selected skills
@@ -158,9 +159,32 @@ After Skill Selection and before SPEC/PLAN, classify the task and apply the matc
 
 This classification is lightweight: it informs skill selection, task size, document depth, and subagent usage.
 
-## Size Classification Gate (S / M / L)
+## Size Classification Gate (XS / S / M / L)
 
 After Skill Selection and task-type classification, classify every request by size. The workflow remains mandatory, but the required documents and subagent depth depend on size.
+
+### XS - Patch Lane
+
+Use XS only when all are true:
+
+- Affects one file or a very small set of tightly related documentation/config/test-only files.
+- Changes no public REST API contract, request/response DTO, database schema, dependency, deployment topology, frontend/backend contract, Agent/RAG orchestration, model-provider behavior, permission/security architecture, or production data semantics.
+- Has no meaningful product workflow ambiguity.
+- Can be verified by focused inspection, one targeted test, or a clearly explained manual check.
+
+XS workflow:
+
+```text
+Focused file/context read
+→ One-line Skill Selection + Size Classification = XS
+→ No pre-implementation docs
+→ No subagents
+→ Implementation
+→ Focused verification only
+→ Final response records files changed, verification, and residual risk
+```
+
+XS must upgrade to S or higher if it touches production behavior beyond the local patch, needs more than one edit/verify loop to understand, or reveals API/DB/Agent/RAG/security/dependency risk.
 
 ### S - Small Slice / Fast Lane
 
@@ -179,15 +203,15 @@ Project Memory quick read
 → Skill Selection short report
 → Size Classification = S
 → No subagents by default
-→ Mini TASK with embedded Context Pack
+→ Single TASK with embedded Context Pack
 → RED/GREEN or focused verification
 → Implementation
 → Focused + adjacent tests; full test only when risk justifies it
-→ Combined Evidence/Acceptance
-→ Concise Changelog + Memory update
+→ Evidence/Acceptance recorded inside the TASK
+→ Changelog + Memory update only when durable impact exists
 ```
 
-S may skip separate PRD, REQ, SPEC, PLAN, standalone Context Pack, subagent reports, and standalone Retro unless the change grows beyond S boundaries.
+S may skip separate PRD, REQ, SPEC, PLAN, standalone Context Pack, standalone Evidence, standalone Acceptance, subagent reports, and standalone Retro unless the change grows beyond S boundaries.
 
 ### M - Standard Feature Slice
 
@@ -200,7 +224,7 @@ Project Memory
 → Skill Selection
 → Size Classification = M
 → Subagents optional for analysis/design when useful
-→ REQ / SPEC / PLAN / TASK / Context Pack
+→ SPEC / TASK / Context Pack by default
 → Implementation
 → Focused + adjacent tests; full test when backend/frontend risk justifies it
 → Evidence
@@ -208,7 +232,7 @@ Project Memory
 → Changelog + Memory update
 ```
 
-PRD is required for M only when product/user behavior or workflow semantics change. Retrospective and skill extraction are required only when reusable process or domain knowledge was discovered.
+For M, add `REQ` only when requirement boundaries are unclear, add `PLAN` only for multi-step or cross-module sequencing, and add `PRD` only when product/user behavior or workflow semantics change. Retrospective and skill extraction are required only when reusable process or domain knowledge was discovered.
 
 ### L - Large Feature / Architecture Change
 
@@ -374,15 +398,16 @@ Exceptions (keep English): API paths, JSON field names, SQL, state enums, code i
 
 Implementation must not begin until the required documents for the selected size exist:
 
-- S: `docs/tasks/TASK-*.md` with embedded Context Pack.
-- M: `docs/requirements/REQ-*.md`, `docs/specs/SPEC-*.md`, `docs/plans/PLAN-*.md`, `docs/tasks/TASK-*.md`, and `docs/context/CONTEXT-*.md`. PRD is required only when product/user behavior changes.
+- XS: no pre-implementation workflow document is required; the final response is the record.
+- S: `docs/tasks/TASK-*.md` with embedded Context Pack, Evidence, and Acceptance.
+- M: `docs/specs/SPEC-*.md`, `docs/tasks/TASK-*.md`, and `docs/context/CONTEXT-*.md` by default. Add `REQ` only when requirement boundaries are unclear, `PLAN` only for multi-step/cross-module sequencing, and `PRD` only when product/user behavior changes.
 - L: `docs/product/PRD-*.md`, `docs/requirements/REQ-*.md`, `docs/specs/SPEC-*.md`, `docs/plans/PLAN-*.md`, `docs/tasks/TASK-*.md`, and `docs/context/CONTEXT-*.md`.
 
 If the task grows beyond the selected size, stop, reclassify, and create the additional documents before continuing.
 
 ## Context Pack Rule
 
-Before implementation, create a Context Pack. For S tasks, the Context Pack may be embedded in the mini TASK file. For M/L tasks, create a standalone file under `docs/context/`.
+Before implementation, create a Context Pack according to size. XS tasks do not need a Context Pack. For S tasks, the Context Pack is embedded in the TASK file. For M/L tasks, create a standalone file under `docs/context/`.
 
 The Context Pack must define:
 
@@ -407,27 +432,27 @@ Never commit API keys, secrets, or credentials.
 
 ## Architecture Drift Check
 
-Before and after implementation:
+Architecture drift checks are risk-triggered:
 
-1. Read `docs/architecture/ARCHITECTURE_BASELINE.md`.
-2. Run `docs/architecture/ARCHITECTURE_DRIFT_CHECK.md` checklist.
-3. If drift is detected, document it in PLAN or create an ADR before proceeding.
+1. Required for backend/frontend architecture boundary changes, Agent/RAG orchestration, permission/security, DB schema, dependencies, deployment topology, API contracts, or model-provider behavior.
+2. Optional for XS/S docs-only, copy, style, test-only, or local validation changes with no architecture impact.
+3. When required, read `docs/architecture/ARCHITECTURE_BASELINE.md`, run `docs/architecture/ARCHITECTURE_DRIFT_CHECK.md`, and document drift in PLAN/TASK or create an ADR before proceeding.
 
 ## Evidence / Acceptance Rule
 
 After implementation:
 
-1. Run tests using commands in `docs/harness/TEST_COMMANDS.md`.
-2. Create evidence and acceptance records according to task size.
-3. S tasks may use one combined `docs/evidence/EVIDENCE-*.md` that includes acceptance criteria and verdict.
+1. Run the focused or full tests justified by task size and risk, using `docs/harness/TEST_COMMANDS.md` when applicable.
+2. XS tasks record verification and residual risk in the final response only.
+3. S tasks record evidence and acceptance verdict inside the TASK file.
 4. M/L tasks should create standalone `docs/evidence/EVIDENCE-*.md` and `docs/acceptance/ACCEPT-*.md`.
-5. A feature or slice is not done without test evidence and an acceptance verdict.
+5. A feature or slice is not done without test evidence and an acceptance verdict at the required size depth.
 
 ## Retrospective / Skill Extraction Rule
 
 After completing a feature:
 
-1. S tasks: retrospective and skill extraction are optional; do them only if a reusable pattern or workflow issue was discovered.
+1. XS/S tasks: retrospective and skill extraction are optional; do them only if a reusable pattern or workflow issue was discovered.
 2. M tasks: run a short retrospective when implementation required multiple iterations, cross-module tradeoffs, or non-obvious decisions.
 3. L tasks: run retrospective using `docs/retrospectives/RETRO-TEMPLATE.md`.
 4. Extract reusable patterns into `docs/skills/project-specific/` when useful.
@@ -438,7 +463,7 @@ After completing a feature:
 During implementation:
 
 - Implement only one task at a time.
-- Modify only files listed in the Context Pack, embedded or standalone.
+- Modify only files listed in the Context Pack, embedded or standalone. For XS, modify only the directly identified files named in the working notes/final response.
 - Do not rewrite large modules without approval.
 - Do not change API contracts without updating specs.
 - Do not change database schema without updating specs.
@@ -495,18 +520,27 @@ Always:
 
 A feature or slice is done only when the selected size's done definition is met:
 
+### XS Done Definition
+
+- Patch stayed inside XS boundaries.
+- Code/docs/config are implemented.
+- Focused verification is run, or limitation is explained.
+- Final response records files changed, verification, remaining risk, and any reason memory/changelog was not updated.
+
 ### S Done Definition
 
-- Mini TASK exists and includes goal, scope, allowed files, disallowed files, tests, and acceptance criteria.
+- Single TASK exists and includes goal, scope, allowed files, disallowed files, tests, embedded Context Pack, evidence, and acceptance criteria.
 - Code is implemented.
 - Focused and adjacent tests are run, or any limitation is explained.
-- Combined Evidence/Acceptance exists with a clear verdict.
-- Changelog and project/domain memory are updated concisely.
+- TASK Evidence/Acceptance has a clear verdict.
+- Changelog and project/domain memory are updated concisely when the slice changes durable behavior, workflow, or project decisions.
 - Parent epic child item is updated without marking the parent complete unless all child items are done.
 
 ### M Done Definition
 
-- REQ, SPEC, PLAN, TASK, and Context Pack exist.
+- SPEC, TASK, and Context Pack exist.
+- REQ exists if requirement boundaries were unclear.
+- PLAN exists if multi-step or cross-module sequencing was needed.
 - PRD exists if product/user behavior changed.
 - Code is implemented.
 - Focused and adjacent tests are run; full tests are run when risk justifies it, or limitation is explained.

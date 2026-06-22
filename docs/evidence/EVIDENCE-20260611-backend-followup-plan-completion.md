@@ -13,11 +13,17 @@
 ```powershell
 cd backend
 mvn --% -Dtest=SchemaConvergenceMigrationTest,MysqlMigrationSmokeTest,QdrantVectorExternalSmokeTest,ModelProviderExternalSmokeTest,QdrantVectorIndexAdapterTest,RagVectorConfigurationTest,EmbeddingServiceTest,AiModelGatewayTest,TokenBudgetGateServiceTest,BusinessPermissionMatrixRegressionTest test
+mvn test
+
+cd ../frontend
+pnpm test
 ```
 
 ## 验证结果
 
 - PASS：56 run, 0 failures, 0 errors, 3 skipped。
+- PASS：backend full `mvn test`，627 run, 0 failures, 0 errors, 3 skipped。
+- PASS：frontend `pnpm test`，31 passed。
 - Skipped 项为 opt-in smoke：
   - `MysqlMigrationSmokeTest`
   - `QdrantVectorExternalSmokeTest`

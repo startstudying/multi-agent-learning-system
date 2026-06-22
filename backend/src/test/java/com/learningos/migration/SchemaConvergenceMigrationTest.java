@@ -303,6 +303,22 @@ class SchemaConvergenceMigrationTest {
                 .contains("idx_ops_alert_status");
     }
 
+    @Test
+    void v23MigrationAddsMemoryLifecycleGovernanceColumns() throws IOException {
+        String migration = migrationText("db/migration/V23__memory_lifecycle_governance.sql");
+
+        assertThat(migration)
+                .contains("kb_chat_session")
+                .contains("learner_id varchar(120)")
+                .contains("salience_score double")
+                .contains("decay_at datetime(6)")
+                .contains("deleted_at datetime(6)")
+                .contains("kb_chat_message")
+                .contains("content_summary varchar(2000)")
+                .contains("editable boolean")
+                .contains("idx_kb_chat_message_lifecycle");
+    }
+
     private String migrationText(String resourcePath) throws IOException {
         try (InputStream stream = getClass().getClassLoader().getResourceAsStream(resourcePath)) {
             assertThat(stream).as(resourcePath + " exists").isNotNull();

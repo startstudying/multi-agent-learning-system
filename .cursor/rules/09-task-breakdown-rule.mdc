@@ -1,5 +1,5 @@
 ---
-description: Break plans into single-focus tasks with clear done criteria.
+description: Create size-aware single-focus tasks with clear done criteria.
 globs:
   - "docs/tasks/**"
 alwaysApply: false
@@ -15,7 +15,7 @@ Each TASK must:
 
 - Address exactly one focused unit of work
 - List done criteria
-- Reference parent PLAN and SPEC
+- Reference parent PLAN and SPEC when they exist; S tasks may reference only the user request and embedded Context Pack
 - Define files allowed to modify
 - Define test commands to run
 - Be implementable in a single session

@@ -91,6 +91,64 @@ export interface RagQueryResponse {
   traceId: string
 }
 
+export interface AiQaToolCallSummary {
+  name: string
+  status: string
+  summary: string
+}
+
+export interface AiQaLearnerFit {
+  summary: string
+  contextItems: number
+  score: number
+}
+
+export interface AiQaNextStep {
+  title: string
+  action: string
+}
+
+export interface AiQaUncertainty {
+  level: string
+  reason: string
+  factors: string[]
+}
+
+export interface AiQaVerificationCheck {
+  name: string
+  status: string
+  severity: string
+  message: string
+}
+
+export interface AiQaVerificationSummary {
+  verdict: string
+  checks: AiQaVerificationCheck[]
+  qualityFlags: string[]
+  requiresReview: boolean
+  gatePolicy: string
+}
+
+export interface AiQaResponse {
+  answer: string
+  answerMode: string
+  reasoningEffort: string
+  reasoningSummary: string
+  sourceStatus: string
+  sourcePolicy: string
+  sources: SourceCitationResponse[]
+  citations: SourceCitationResponse[]
+  learnerFit: AiQaLearnerFit
+  nextSteps: AiQaNextStep[]
+  uncertainty: AiQaUncertainty
+  qualityFlags: string[]
+  requiresReview: boolean
+  verification: AiQaVerificationSummary | null
+  traceId: string
+  workflowId?: string | null
+  toolCalls: AiQaToolCallSummary[]
+}
+
 export interface ResourceGenerationResponse {
   taskId: string
   agentTaskId: string
@@ -308,6 +366,13 @@ export interface WorkbenchState {
   sseStage: string
   ragAnswer: string
   ragSources: CitationSource[]
+  qaVerification: AiQaVerificationSummary | null
+  qaQualityFlags: string[]
+  qaSourcePolicy: string
+  qaUncertaintyLevel: string
+  qaAnswerMode: string
+  qaReasoningEffort: string
+  qaToolCallCount: number
   mastery: number
   assessmentStatus: string
   assessmentAnswer: string

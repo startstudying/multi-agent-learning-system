@@ -1,5 +1,5 @@
 ---
-description: Automatically treat raw user requirements as controlled feature-development tasks using Project Memory, Skill Selection, Subagent Gate, Spec-first docs, Context Pack, implementation, evidence, acceptance, and memory update.
+description: Automatically treat raw user requirements as size-aware feature-development tasks.
 globs:
   - "**/*"
 alwaysApply: true
@@ -13,27 +13,21 @@ Automatically apply this workflow:
 
 ```text
 Raw Requirement
-→ Project Memory
+→ Project Memory depth by size
 → Skill Selection Gate
-→ Multi-Expert Subagent Gate
+→ Size Classification Gate (XS / S / M / L)
+→ Multi-Expert Subagent Gate when size/risk requires it
 → GitHub Reference Gate if needed
-→ PRD
-→ REQ
-→ SPEC
-→ PLAN
-→ TASK
-→ Context Pack
+→ Size-specific documents
 → Parallel / Single Task Execution
-→ Integration Review
+→ Integration Review when risk or subagents justify it
 → Test
-→ Evidence
-→ Acceptance
-→ Changelog
-→ Memory Update
-→ Skill Extraction
+→ Evidence / Acceptance according to size
+→ Changelog / Memory Update according to size
+→ Skill Extraction only when useful or required
 ```
 
-If required documents are missing, create them first.
+If required documents for the selected size are missing, create them first. XS has no pre-implementation workflow document.
 
 Do not ask the user to repeat the standard workflow prompt.
 
@@ -43,7 +37,7 @@ Invoke the `feature-development-workflow` skill from `.agents/skills/feature-dev
 
 Subagent gate rules:
 
-- 1 module: single Codex (no subagents)
+- XS/S and 1 module: single Codex (no subagents)
 - 2 modules: may use experts for parallel analysis (L1)
 - 3+ modules: must use Multi-Expert Subagent
 - Agent/RAG: must include Agent/RAG Expert
@@ -51,4 +45,11 @@ Subagent gate rules:
 
 Parallelism: L1 analysis and L2 design allowed; L3 implementation only with worktree + no file overlap.
 
-For small tasks (copy, style, one field): single Codex, no subagents.
+Size-specific documents:
+
+- XS: no pre-implementation docs; final response records files, verification, and residual risk.
+- S: one TASK with embedded Context Pack, Evidence, and Acceptance.
+- M: SPEC + TASK + Context Pack by default; add REQ, PLAN, or PRD only when triggered.
+- L: full PRD / REQ / SPEC / PLAN / TASK / Context Pack.
+
+For small tasks (copy, style, one field): prefer XS or S, single Codex, no subagents.

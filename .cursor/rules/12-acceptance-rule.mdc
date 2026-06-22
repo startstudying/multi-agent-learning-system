@@ -1,5 +1,5 @@
 ---
-description: Require evidence and acceptance reports before marking features done.
+description: Require size-appropriate evidence and acceptance before marking work done.
 globs:
   - "docs/evidence/**"
   - "docs/acceptance/**"
@@ -8,18 +8,17 @@ alwaysApply: false
 
 # Acceptance Rule
 
-Write Evidence and Acceptance reports in **Chinese**.
+Write Evidence and Acceptance records in **Chinese** when a workflow document is required.
 
 After implementation and testing:
 
-1. Create evidence document under `docs/evidence/` using `EVIDENCE-TEMPLATE.md`.
-2. Create acceptance report under `docs/acceptance/` using `ACCEPT-TEMPLATE.md`.
-3. Update `docs/changelog/CHANGELOG.md`.
-4. Update project memory.
+1. XS: record verification and residual risk in the final response only.
+2. S: record evidence and acceptance verdict inside the TASK file.
+3. M/L: create evidence under `docs/evidence/` and acceptance under `docs/acceptance/`.
+4. Update changelog/project memory according to task size and durable impact.
 
 A feature is not done without:
 
 - Evidence of tests run (or explained limitation)
 - Acceptance checklist completed
-- Changelog entry
-- Memory update
+- Changelog/memory update when required by size or durable impact

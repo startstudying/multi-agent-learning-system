@@ -22,6 +22,7 @@ import com.learningos.agent.repository.ResourceGenerationTaskRepository;
 import com.learningos.agent.repository.ResourceReviewRepository;
 import com.learningos.common.api.ErrorCode;
 import com.learningos.common.exception.ApiException;
+import com.learningos.common.privacy.MemoryPrivacyPolicy;
 import com.learningos.common.trace.TraceContext;
 import com.learningos.knowledge.application.CourseAccessService;
 import com.learningos.learning.domain.LearnerProfile;
@@ -61,6 +62,7 @@ public class ResourceGenerationService {
     private final SourceCitationRepository sourceCitationRepository;
     private final CourseAccessService courseAccessService;
     private final ObjectMapper objectMapper;
+    private final MemoryPrivacyPolicy memoryPrivacyPolicy;
 
     @Autowired
     public ResourceGenerationService(
@@ -76,7 +78,8 @@ public class ResourceGenerationService {
             LearnerProfileRepository learnerProfileRepository,
             SourceCitationRepository sourceCitationRepository,
             CourseAccessService courseAccessService,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            MemoryPrivacyPolicy memoryPrivacyPolicy
     ) {
         this.contentSafetyService = contentSafetyService;
         this.resourceGenerationTaskRepository = resourceGenerationTaskRepository;
@@ -91,6 +94,7 @@ public class ResourceGenerationService {
         this.sourceCitationRepository = sourceCitationRepository;
         this.courseAccessService = courseAccessService;
         this.objectMapper = objectMapper;
+        this.memoryPrivacyPolicy = memoryPrivacyPolicy == null ? new MemoryPrivacyPolicy() : memoryPrivacyPolicy;
     }
 
     public ResourceGenerationService(
@@ -120,7 +124,8 @@ public class ResourceGenerationService {
                 learnerProfileRepository,
                 sourceCitationRepository,
                 null,
-                objectMapper
+                objectMapper,
+                new MemoryPrivacyPolicy()
         );
     }
 
@@ -521,7 +526,7 @@ public class ResourceGenerationService {
         LearnerProfile profile = learnerProfileRepository.findFirstByLearnerIdOrderByUpdatedAtDesc(learnerId)
                 .orElse(null);
         Map<String, Object> snapshot = new LinkedHashMap<>();
-        snapshot.put("learnerId", learnerId);
+        snapshot.put("profileRef", memoryPrivacyPolicy.profileRef(profile == null ? null : profile.getId()));
         if (profile == null) {
             snapshot.put("target", "unknown");
             snapshot.put("baseline_level", "unknown");
@@ -530,7 +535,6 @@ public class ResourceGenerationService {
             snapshot.put("preference", List.of());
             snapshot.put("pace_and_feedback", "Needs frequent mastery checks with quick feedback");
             snapshot.put("recent_error_pattern", "No recent error pattern is available yet");
-            snapshot.put("teacher_note", "No teacher note is available yet");
             snapshot.put("sources", List.of());
             return toJson(snapshot);
         }
@@ -544,9 +548,17 @@ public class ResourceGenerationService {
         snapshot.put("pace_and_feedback", text(dimensions, "pace_and_feedback", "Needs frequent mastery checks with quick feedback"));
         snapshot.put("recent_error_pattern", text(dimensions, List.of("recent_error_pattern", "error_pattern"),
                 "No recent error pattern is available yet"));
-        snapshot.put("teacher_note", text(dimensions, "teacher_note", "No teacher note is available yet"));
-        snapshot.put("sources", array(dimensions, "sources"));
+        snapshot.put("sources", lowSensitiveSources(array(dimensions, "sources")));
         return toJson(snapshot);
+    }
+
+    private List<String> lowSensitiveSources(List<String> sources) {
+        if (sources == null) {
+            return List.of();
+        }
+        return sources.stream()
+                .filter(source -> !"TEACHER_NOTE".equalsIgnoreCase(source))
+                .toList();
     }
 
     private JsonNode readDimensions(String dimensionsJson) {

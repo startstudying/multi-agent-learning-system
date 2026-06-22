@@ -2,13 +2,185 @@
 
 All notable changes to this project are documented here.
 
+## Local Cloudflare Frontend Preview - 2026-06-11
+
+- Started the Vue/Vite frontend on `0.0.0.0:5173` and exposed it through a temporary Cloudflare Tunnel.
+- Public preview URL: `https://bring-tags-advances-bend.trycloudflare.com`.
+- Verification passed: local frontend `200`, public tunnel `200`.
+- Backend startup was attempted but blocked by local MySQL credentials: `learning_os` access denied; Docker Desktop was not available to start the compose database.
+- Evidence: `docs/evidence/EVIDENCE-20260611-local-cloudflare-preview.md`.
+
 ## [Unreleased]
+
+- Fusion RAG POC Evaluation Verifier (2026-06-22):
+  - Added offline RAG comparison support for `baseline topK` vs `poc-context` captured outputs through the existing RAG evaluation API.
+  - Added `CitationCoverageAnalyzer` and new metrics `coreClaimCitationCoverage` / `uncitedContextLeakRate` for benchmark and comparison evaluation.
+  - Extended `AnswerVerifier` with `CORE_CLAIM_CITATION_COVERAGE` and `UNCITED_CONTEXT_LEAK_GUARD`; uncovered multi-claim answers now request review via WARN without hard-failing the answer.
+  - Extended Evaluation Run metric whitelist with the new coverage/leak metrics; `uncitedContextLeakRate` is lower-is-better.
+  - No DB schema, dependency, frontend, production RAG dual-run, POC toggle, GraphRAG, or Agentic RAG change was added.
+  - Verification passed: focused tests (33), adjacent AI QA/RAG tests (30), and backend compile.
+  - Evidence: `docs/evidence/EVIDENCE-20260622-fusion-rag-poc-evaluation-verifier.md`; Acceptance: `docs/acceptance/ACCEPT-20260622-fusion-rag-poc-evaluation-verifier.md`.
+
+- RAG POC Context Builder (2026-06-22):
+  - Added backend `PocContextBuilder` to adapt `wiki-rag` parent/own/child post-retrieval context optimisation into the existing Java/Spring RAG pipeline.
+  - RAG answers can now use parent heading-chain, adjacent, and child chunks after retrieval/rerank, while citations and `source_citation` remain anchored to the original retrieved source chunks.
+  - Added safe `sourcesJson.pocContext` metadata with counts only; no expanded chunk content, raw question, prompt, provider response, or secrets are persisted.
+  - No API, DB schema, dependency, frontend, query rewrite, HyDE, MCP, or vector provider change was added.
+  - Verification passed: focused POC/RAG query tests (25), adjacent AI QA/RAG tests (16), and backend compile.
+  - Evidence: `docs/evidence/EVIDENCE-20260622-rag-poc-context-builder.md`; Acceptance: `docs/acceptance/ACCEPT-20260622-rag-poc-context-builder.md`.
+
+- Memory lifecycle governance MVP (2026-06-21):
+  - Added V23 memory lifecycle migration for `kb_chat_session` and `kb_chat_message`.
+  - Extended chat session/message entities and repositories with owner, course, status, salience, decay, editable, and soft-delete fields.
+  - Added `MemoryLifecycleService` for low-sensitive AI QA memory summaries, salience/decay, session listing, owner-only edits, and soft deletes.
+  - Added `/api/ai/memory/sessions` plus message patch/delete endpoints.
+  - Wired `AiQaService` to record low-sensitive `AI_QA_SUMMARY` memory after successful QA runtime responses.
+  - Updated `MemoryContextService` to prefer active non-expired session memory before learning-event fallback.
+  - Verification passed: focused P2 tests (26), adjacent AI QA/runtime tests (7), backend compile, and privacy grep.
+  - Evidence: `docs/evidence/EVIDENCE-20260621-memory-lifecycle-governance-mvp.md`; Acceptance: `docs/acceptance/ACCEPT-20260621-memory-lifecycle-governance-mvp.md`.
+
+- QA streaming and trace workbench MVP (2026-06-21):
+  - Added `POST /api/ai/qa/stream` with `status`, `token`, `done`, and safe `error` SSE events.
+  - Reused `AiQaService`, `QaRuntime`, and `AnswerVerifier` for streamed AI QA responses without adding DB schema or dependencies.
+  - Added frontend `streamAiQa` through the shared streaming request wrapper.
+  - Switched the student production/staging safe streaming path to `/api/ai/qa/stream`, keeping question/kbIds in the JSON body rather than the URL.
+  - Student answer UI now shows QA verification verdict, gate policy, source policy, uncertainty, answer mode, reasoning effort, tool call count, and quality flags.
+  - Verification passed: backend `AiQaControllerTest` (5), frontend `App.spec.ts` (34), backend compile, frontend build, and safety grep.
+  - Evidence: `docs/evidence/EVIDENCE-20260621-qa-streaming-trace-workbench-mvp.md`; Acceptance: `docs/acceptance/ACCEPT-20260621-qa-streaming-trace-workbench-mvp.md`.
+
+- Basic Verifier / Eval Gate MVP (2026-06-21):
+  - Added backend `AnswerVerifier` for schema, citation, no-source, and privacy checks on `/api/ai/qa` responses.
+  - Added `QaEvalGate` with minimum `PASS` / `FAIL` / `INSUFFICIENT_SAMPLE` verdict support.
+  - Extended `AiQaResponse` with `verification` and wired `QaRuntime` to append a low-sensitive `AnswerVerifier` tool call after final composition.
+  - Added Evaluation Set support for `AI_QA_ANSWER` samples and Evaluation Run metric whitelist support for `schemaPassRate`, `verificationPassRate`, and `privacyLeakRate`.
+  - No DB schema, dependency, frontend, real model reviewer, batch eval runner, P1 streaming/workbench, or P2 memory lifecycle change was added.
+  - Verification passed: focused verifier/runtime tests (10), adjacent AI QA/evaluation/RAG tests (50), compile, and privacy grep.
+  - Evidence: `docs/evidence/EVIDENCE-20260621-qa-verifier-eval-gate-mvp.md`; Acceptance: `docs/acceptance/ACCEPT-20260621-qa-verifier-eval-gate-mvp.md`.
+
+- QaRuntime structured answer MVP (2026-06-21):
+  - Added backend `QaRuntime` and runtime steps `IntentRouter`, `ContextOrchestrator`, and `FinalComposer` so `/api/ai/qa` is no longer just a direct RAG wrapper.
+  - Changed `AiQaService` into a thin facade that delegates to `QaRuntime.run(...)`.
+  - Extended `AiQaResponse` with `citations`, `learnerFit`, `nextSteps`, `uncertainty`, `qualityFlags`, and `requiresReview` while preserving existing `sources`.
+  - Runtime `toolCalls` now expose low-sensitive summaries for `IntentRouter`, `RagQueryService`, `MemoryContextService`, `ContextOrchestrator`, and `FinalComposer`.
+  - No-source responses keep `sources/citations` empty, set `GENERAL_FALLBACK / NO_COURSE_SOURCE_FALLBACK`, mark `uncertainty.level=MEDIUM`, include `NO_SOURCE_FALLBACK`, and require review.
+  - No DB schema, dependency, frontend, real model provider, or SSE streaming change was added.
+  - Verification passed: `QaRuntimeTest` (2), `AiQaControllerTest,QaModePolicyTest,MemoryContextServiceTest,RagQueryServiceTest` (32), and compile.
+  - Evidence: `docs/evidence/EVIDENCE-20260621-qa-runtime-structured-answer-mvp.md`; Acceptance: `docs/acceptance/ACCEPT-20260621-qa-runtime-structured-answer-mvp.md`.
+
+- MemoryContextService MVP (2026-06-21):
+  - Added backend `MemoryContextService` and `MemoryContext` to prepare low-sensitive learner summary, learning signals, RAG citation context, recent learning-event summaries, preference memories, injection reasons, and token budget.
+  - Wired `/api/ai/qa` to return a `MemoryContextService` preparation summary through the existing `toolCalls` field without changing request DTOs, DB schema, dependencies, or frontend code.
+  - Context filtering excludes raw learner ids, teacher notes, provider keys, raw prompts, and full citation excerpts; long or sensitive values mark the context budget as truncated.
+  - Verification passed: `MemoryContextServiceTest` (1) and `AiQaControllerTest,RagQueryServiceTest` (26).
+  - Evidence: `docs/evidence/EVIDENCE-20260621-memory-context-service-mvp.md`; Acceptance: `docs/acceptance/ACCEPT-20260621-memory-context-service-mvp.md`.
+
+- Memory/RAG Privacy Guard (2026-06-21):
+  - Added backend `MemoryPrivacyPolicy` and wired it into RAG query logging, source citation persistence, learning path snapshots, and resource generation snapshots.
+  - New RAG query logs store `questionHash/questionLength` instead of raw questions; source citation records store citation reference/hash/length instead of full excerpts.
+  - requestId RAG replay snapshots now persist a `RAG_REPLAY_REDACTED` response that keeps trace/retrieval/source identity while hiding answer and source excerpt text.
+  - `profileSnapshot` now uses `profileRef` and low-sensitive learner fields; raw `learnerId`, `teacher_note`, and `TEACHER_NOTE` sources are excluded from learning path/resource generation snapshots and ResourceAgent context.
+  - Verification passed: `RagQueryServiceTest` (22), `LearningWorkflowControllerTest,ResourceGenerationControllerTest` (54), and `OrchestratorWorkflowControllerTest` (33).
+  - Evidence: `docs/evidence/EVIDENCE-20260621-memory-rag-privacy-guard.md`; Acceptance: `docs/acceptance/ACCEPT-20260621-memory-rag-privacy-guard.md`.
+
+- chanceNB frontend overwrite migration (2026-06-21):
+  - Overwrote the current `frontend` with `chanceNB/main` frontend source at `20bc8aacb0d8e368df97c8d251adc704713bb0fe` after user approval.
+  - Removed 13 stale `frontend/src` files that were not present in the migration source so the old student workspace / AI QA frontend line does not remain mixed with the imported UI.
+  - Verification passed: `pnpm test -- --run` (34 passed), `pnpm build`, and local preview `http://127.0.0.1:4173/` returned 200.
+  - Known risk: the imported frontend may expect chat session backend APIs that were not migrated in this task.
+
+- Memory and Answer Quality Roadmap (2026-06-21):
+  - Added a docs-only L-size roadmap for the project's Agent memory system and ChatGPT-level answer quality system.
+  - Captured the core gap: existing RAG, Trace, PromptVersion, Evaluation, Model Gateway, and learner profile foundations are not yet composed into a unified `QaRuntime` / `MemoryContextService` / `AnswerVerifier` loop.
+  - Recommended P0 order: Memory/RAG Privacy Guard, MemoryContextService MVP, QaRuntime/structured answer MVP, then Verifier/Eval Gate.
+  - Added a readable execution plan and a beginner-notes research report with left-column annotations for easier handoff.
+  - Added `moodlehq/wiki-rag` GitHub reference research, recommending its POC/POP context optimisation ideas as a future RAG improvement while avoiding direct Python/Milvus/MCP adoption.
+  - No backend/frontend runtime code, DB schema, dependency, or API contract was changed.
+
+- Workflow XS/Patch Lane:
+  - Added an `XS / Patch Lane` for low-risk small changes with no pre-implementation workflow documents.
+  - Changed S tasks to one TASK with embedded Context Pack, Evidence, and Acceptance.
+  - Changed M tasks to default to `SPEC + TASK + CONTEXT`, with `REQ`, `PLAN`, and `PRD` only when triggered.
+  - Updated Cursor rules and the feature-development workflow skill so auto-intake, memory, evidence, and architecture drift checks are size/risk-aware.
+
+- Student UI design alignment (2026-06-13):
+  - Renamed sidebar nav「管理后台」to「设置」; added「查找中心」; updated brand to「AI 学习陪伴系统」.
+  - Restyled student workbench chat, context panel, and top utility bar to match reference mock.
+  - Removed student debug/support panels (profile editor, KB upload, resources, assessment, Agent Trace, API list, workflow strip) from the main dashboard; chat + right context only.
+  - Verification: frontend tests 20 passed, build passed.
+  - Evidence: `docs/evidence/EVIDENCE-20260613-student-ui-design-alignment.md`.
+
+- Student dashboard data source dehardening:
+  - Removed fixed demo IDs from production student frontend source and moved student identity fallback behind `getDefaultUserId()`.
+  - Added course API wiring and student workbench selection state for course, knowledge base, goal, path node, and question.
+  - Student RAG / AI QA / upload / resource generation now use selected backend data; initial resources and Agent Trace are empty until backend actions return data.
+  - Assessment submission no longer fabricates a question ID; without a confirmed course-question list API it shows an explicit empty state and skips `/api/assessment/answers`.
+  - Verification passed: frontend `pnpm test -- --run` (34 passed), frontend `pnpm build`, and fixed-ID static search returned no matches in production frontend scope.
+  - Evidence: `docs/evidence/EVIDENCE-20260611-student-dashboard-data-source-dehardcoding.md`; Acceptance: `docs/acceptance/ACCEPT-20260611-student-dashboard-data-source-dehardcoding.md`.
+
+- jc-ai reference optimization roadmap:
+  - Added a docs-only L-size optimization roadmap based on the user-provided `jc-ai` reference zip and GitCode source URL.
+  - Captured recommended priorities: red-team/prompt-injection evaluation, RAG/Agent quality workbench, Agent Trace scoring, governed HyDE, high-risk tool approval, MCP/A2A ADRs, frontend quality components, outbound allowlist, and scoped token budgets.
+  - No backend/frontend runtime code, DB schema, dependency, API contract, or protocol endpoint was changed.
+
+- AI QA no-source fallback:
+  - `/api/ai/qa` now distinguishes `COURSE_GROUNDED / COURSE_RAG` from `GENERAL_FALLBACK / NO_COURSE_SOURCE_FALLBACK`.
+  - When course RAG has no reliable source, AI QA returns a backend-controlled general fallback answer without fabricated citations instead of surfacing the strict RAG refusal as the student answer.
+  - Student UI now displays the source status so learners can tell whether the answer used course material or general fallback.
+  - Verification passed: backend focused/adjacent `29 run, 0 failures`; frontend `33 passed`; frontend build passed.
+
+- Student upload panel polish:
+  - Fixed unreadable frontend API network error text so document upload failures show a helpful Chinese backend-connection message instead of raw `Failed to fetch`.
+  - Polished the student knowledge-base upload panel, file picker, upload button, error banner, and document list styling.
+  - Added regression coverage for upload API connection failure.
+  - Verification passed: frontend `pnpm test -- --run` (32 passed) and `pnpm build`.
+
+- AI QA Slice 1 unified contract:
+  - Added backend `POST /api/ai/qa` with `answerMode`, `reasoningEffort`, safe `reasoningSummary`, citations, `traceId`, `workflowId`, and `toolCalls`.
+  - Added backend mode policy: `FAST=low`, `THINKING=medium`, `EXPERT=high`; blank mode defaults to `THINKING`, unknown modes return `VALIDATION_ERROR`.
+  - Added student frontend mode selector and safe reasoning summary display; production/staging question submission uses the unified `/api/ai/qa` POST contract.
+  - Verification passed: backend focused `7 run, 0 failures`; backend adjacent `21 run, 0 failures`; frontend `31 passed`; frontend build passed.
+
+- Frontend UI redesign execution:
+  - Reworked the student workspace toward the GPT Web-style reference: light left navigation, central course chat thread, sticky rounded composer, and right activity/context panel.
+  - Preserved unified AI QA behavior with `FAST` / `THINKING` / `EXPERT` mode selection, safe `reasoningSummary`, and production `/api/ai/qa` POST calls without legacy SSE fallback.
+  - Refocused teacher review around the queue/decision flow and admin operations around triage states instead of fake metric charts.
+  - Verification passed: frontend `pnpm test -- --run` (31 passed), frontend `pnpm build`, desktop/mobile screenshots under `frontend/target-ui-redesign-20260611/`.
+  - Evidence: `docs/evidence/EVIDENCE-20260611-frontend-ui-redesign.md`; Acceptance: `docs/acceptance/ACCEPT-20260611-frontend-ui-redesign.md`.
+
+- AI QA evolution roadmap model-target calibration:
+  - Clarified that the target is to reproduce GPT Web-quality mechanisms, not membership entitlements: `gpt-5.5`, backend-controlled `reasoning.effort`, clean context, tool retrieval, self-review, structured output, and eval iteration.
+  - Added Slice 1 planning constraints for `FAST=low`, `THINKING=medium`, `EXPERT=high` reasoning effort mapping and safe `reasoningSummary`.
+  - No backend/frontend runtime code, schema, dependency, or API implementation changed.
+
+- AI 问答能力六阶段演进路线：
+  - Added L-size PRD / REQ / SPEC / PLAN / TASK / CONTEXT for evolving from ordinary Vue + Spring Boot QA to mode-aware, reasoning-summary, streaming, tool-calling, multi-agent QA.
+  - Documented recommended slice order: V1-V3 unified QA contract first, V4 streaming second, then file retrieval, web search, code analysis, and multi-agent orchestration.
+  - Captured safety boundaries: no raw chain-of-thought, no frontend LLM/tool access, tool calls through backend Service layer, bounded Agent loops, citations for retrieval-backed answers.
+  - No backend/frontend runtime code or dependencies were changed in this planning task.
+
+- Frontend UI redesign plan:
+  - Added M-size PRD / REQ / SPEC / PLAN / TASK / CONTEXT for repairing the current frontend UI.
+  - Added GitHub reference report covering Open edX Learning MFE, LearnHouse, Kotaemon, assistant-ui, and Vuestic Admin patterns.
+  - Plan keeps the implementation frontend-only: no backend/API/DB/dependency changes.
+
+- Frontend UI audit:
+  - Added a read-only UI/UX audit for Student, Teacher, Admin, and mobile surfaces.
+  - Findings: current UI is visually dense, prototype-like, too API/status exposed, weak on mobile first-task access, and Admin charts still feel like placeholders.
+  - Verification: `cd frontend && pnpm build` currently fails because `frontend/src/api/analytics.ts` imports unused `apiRequest`.
+  - Evidence: `docs/evidence/EVIDENCE-20260611-frontend-ui-audit.md`.
 
 - Epic 后续增强（F1–F7）全部落地：
   - Admin 前端 `/admin/model-providers` 供应商配置页；Embedding registry 路由；Token 预算调用前门禁；Ops 告警持久化 + webhook opt-in + Admin 真实告警区；Qdrant health/dimension probe；PDF parser layout 元数据增强；权限矩阵回归测试；external-smoke opt-in 测试。
+  - 本轮收口将 `ModelProviderExternalSmokeTest` / `QdrantVectorExternalSmokeTest` 从占位测试升级为真实 opt-in smoke，并将 `MysqlMigrationSmokeTest` latest migration 对齐到 V22 / 22。
   - 迁移 V22 `ops_alert_record`；配置项 `learning-os.token-budget` / `learning-os.ops-alert` / `rag.vector.qdrant.expected-dimension`。
-  - 验证：backend `mvn test` 通过；frontend `31 passed`。
+  - 验证：backend `mvn test` 通过（627 run, 0 failures, 0 errors, 3 skipped）；frontend `31 passed`。
   - 证据：`docs/evidence/EVIDENCE-20260611-backend-followup-enhancements-epic.md`
+
+- 学生端知识库上传「Failed to fetch」修复：
+  - Vite dev 代理 `/api` → `localhost:8080`；dev 模式 API base 改为相对路径走代理。
+  - 新增 `WebCorsConfig`（localhost 源）与 `SecurityConfig.cors()`；修复缺失 `HttpSecurity` import 导致编译失败。
+  - 移除 `StudentDashboard` 静态占位文档；网络错误改为中文提示。
+  - 验证：backend `mvn test` 全量通过。
 
 - F1 子任务 model provider registry backend:
   - Added Flyway V21 `model_provider` table and admin-only `/api/admin/model-providers` CRUD/set-default/test-connection APIs.
@@ -518,3 +690,6 @@ All notable changes to this project are documented here.
 
 - Review list/decision APIs keep `admin` global and limit `teacher` to own-course reviews.
 - Non-admin missing/foreign review decisions return safe `FORBIDDEN`.
+# 2026-06-11
+
+- Frontend: separated student, teacher, and admin workspace shells so each role now has role-specific quick navigation, business navigation, context summary, and identity display. Added regression assertions for role navigation boundaries; frontend tests and build pass.

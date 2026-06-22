@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.learningos.common.api.ErrorCode;
 import com.learningos.common.exception.ApiException;
+import com.learningos.common.privacy.MemoryPrivacyPolicy;
 import com.learningos.common.trace.TraceContext;
 import com.learningos.knowledge.application.CourseAccessService;
 import com.learningos.knowledge.domain.KnowledgeDependency;
@@ -66,9 +67,10 @@ public class LearningWorkflowService {
     private final KnowledgeDependencyRepository knowledgeDependencyRepository;
     private final CourseAccessService courseAccessService;
     private final ObjectMapper objectMapper;
+    private final MemoryPrivacyPolicy memoryPrivacyPolicy;
 
     public LearningWorkflowService() {
-        this(null, null, null, null, null, null, null, null, new ObjectMapper());
+        this(null, null, null, null, null, null, null, null, new ObjectMapper(), new MemoryPrivacyPolicy());
     }
 
     public LearningWorkflowService(
@@ -90,7 +92,8 @@ public class LearningWorkflowService {
                 knowledgePointRepository,
                 knowledgeDependencyRepository,
                 null,
-                objectMapper
+                objectMapper,
+                new MemoryPrivacyPolicy()
         );
     }
 
@@ -104,7 +107,8 @@ public class LearningWorkflowService {
             KnowledgePointRepository knowledgePointRepository,
             KnowledgeDependencyRepository knowledgeDependencyRepository,
             CourseAccessService courseAccessService,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            MemoryPrivacyPolicy memoryPrivacyPolicy
     ) {
         this.learnerProfileRepository = learnerProfileRepository;
         this.learningPathRepository = learningPathRepository;
@@ -115,6 +119,7 @@ public class LearningWorkflowService {
         this.knowledgeDependencyRepository = knowledgeDependencyRepository;
         this.courseAccessService = courseAccessService;
         this.objectMapper = objectMapper;
+        this.memoryPrivacyPolicy = memoryPrivacyPolicy == null ? new MemoryPrivacyPolicy() : memoryPrivacyPolicy;
     }
 
     public ProfileExtractResponse extractProfile(ProfileExtractRequest request) {
@@ -997,10 +1002,12 @@ public class LearningWorkflowService {
                 List.of()
         );
         String target = "unknown";
+        String profileId = null;
         if (learnerProfileRepository != null) {
             LearnerProfile profile = learnerProfileRepository.findFirstByLearnerIdOrderByUpdatedAtDesc(learnerId)
                     .orElse(null);
             if (profile != null) {
+                profileId = profile.getId();
                 structuredProfile = readStructuredProfile(profile.getDimensionsJson(), profile.getTarget());
                 structuredProfile = new ProfileStructuredFields(
                         structuredProfile.baselineLevel(),
@@ -1016,7 +1023,7 @@ public class LearningWorkflowService {
             }
         }
         Map<String, Object> snapshot = new LinkedHashMap<>();
-        snapshot.put("learnerId", learnerId);
+        snapshot.put("profileRef", memoryPrivacyPolicy.profileRef(profileId));
         snapshot.put("target", target);
         snapshot.put("baseline_level", structuredProfile.baselineLevel());
         snapshot.put("learning_goal", structuredProfile.learningGoal());
@@ -1024,9 +1031,17 @@ public class LearningWorkflowService {
         snapshot.put("preference", structuredProfile.preference());
         snapshot.put("pace_and_feedback", structuredProfile.paceAndFeedback());
         snapshot.put("recent_error_pattern", structuredProfile.recentErrorPattern());
-        snapshot.put("teacher_note", structuredProfile.teacherNote());
-        snapshot.put("sources", structuredProfile.sources());
+        snapshot.put("sources", lowSensitiveSources(structuredProfile.sources()));
         return toJson(snapshot);
+    }
+
+    private List<ProfileUpdateSourceType> lowSensitiveSources(List<ProfileUpdateSourceType> sources) {
+        if (sources == null) {
+            return List.of();
+        }
+        return sources.stream()
+                .filter(source -> source != ProfileUpdateSourceType.TEACHER_NOTE)
+                .toList();
     }
 
     private NodeRecommendationMetadata fallbackRecommendationMetadata(LearningPathNode node) {

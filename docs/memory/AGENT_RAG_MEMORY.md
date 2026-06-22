@@ -1,5 +1,110 @@
 # AGENT_RAG_MEMORY.md
 
+## 2026-06-22 Fusion RAG POC Evaluation Verifier
+
+- RAG evaluation now supports offline paired comparison for `baseline topK` vs `poc-context` captured outputs.
+- The comparison result includes baseline metrics, candidate metrics, deltas, metric winners, and paired sample-level results; top-level metrics mirror the POC candidate for old consumers.
+- Added deterministic `CitationCoverageAnalyzer` for visible answer/citation-text coverage only; it does not read POC expanded chunks or durable logs.
+- New metrics: `coreClaimCitationCoverage` and `uncitedContextLeakRate`.
+- `AnswerVerifier` now emits WARN/review signals for uncovered multi-claim conclusions and possible uncited context mixing while keeping existing BLOCKER checks as the only hard-fail path.
+- `EvaluationRunService` accepts the new metrics and treats `uncitedContextLeakRate` as lower-is-better.
+- No GraphRAG, Agentic RAG, entity relation model, DB migration, dependency, frontend, production dual-run, or POC query toggle was added.
+- Verification passed: focused tests (33), adjacent AI QA/RAG tests (30), and backend compile.
+
+## 2026-06-22 RAG POC Context Builder
+
+- Implemented the first code slice from the `wiki-rag` reference review: POC post-retrieval context optimisation.
+- `PocContextBuilder` expands each retrieved/reranked source chunk with same-document/same-version parent heading-chain, previous/next chunk, and first child chunk when metadata permits.
+- Expansion is permission-safe: it receives `allowedKbIds` after `PermissionService` and filters candidates again by `kbId` and `documentVersion`.
+- `RagQueryService` uses expanded context to compose grounded answers, but `sources` and `source_citation` remain tied only to original source chunks to avoid fabricated citations.
+- `kb_query_log.sources_json` records safe `pocContext` counts only, not expanded chunk content.
+- No query rewrite, HyDE, MCP, Python runtime, Milvus, API, DB, dependency, or frontend migration was added.
+- Verification passed: focused POC/RAG query tests (25), adjacent AI QA/RAG tests (16), and backend compile.
+
+## 2026-06-21 Memory lifecycle governance MVP
+
+- Implemented P2 after the P0/P1 AI QA answer-quality chain.
+- QA responses now write low-sensitive session memory summaries through `MemoryLifecycleService` after `QaRuntime` succeeds.
+- Session memory records use `AI_QA_SUMMARY`, salience, decay, editable, and soft-delete metadata.
+- `MemoryContextService` now consumes active non-expired `kb_chat_message` summaries before falling back to `learning_event`.
+- Owner-only edit/delete APIs were added under `/api/ai/memory`.
+- The persisted summary remains hash/length/source/verifier metadata only; raw question, full answer, hidden prompt, provider key, teacher note, and raw profile snapshot remain excluded.
+- Verification passed: focused P2 tests (26), adjacent AI QA/runtime tests (7), compile, and privacy grep.
+
+## 2026-06-21 QA streaming and trace workbench MVP
+
+- Implemented P1 MVP after the full P0 answer-quality chain.
+- `/api/ai/qa/stream` now streams AI QA transport events while reusing the existing `QaRuntime` and `AnswerVerifier`.
+- Stream `done` payload includes structured answer, citations, traceId, verification, quality flags, and tool call summaries.
+- Frontend production/staging student QA now uses the AI QA stream path instead of the RAG stream path, keeping question/kbIds out of the URL.
+- Student workbench now displays verifier verdict, gate policy, source policy, uncertainty, answer mode, reasoning effort, tool call count, and quality flags.
+- This is not true provider token streaming and does not yet persist every QA runtime step as durable `agent_trace`.
+- Verification passed: backend AI QA API tests (5), frontend App tests (34), compile, build, and safety grep.
+- P2 memory lifecycle governance remains the next roadmap item.
+
+## 2026-06-21 Basic Verifier / Eval Gate MVP
+
+- Implemented P0-4 `Basic Verifier / Eval Gate MVP` after the P0-1 privacy guard, P0-2 memory context service, and P0-3 runtime.
+- `/api/ai/qa` structured responses now include `verification` with verdict, gate policy, check details, summary, and review requirement.
+- `AnswerVerifier` checks required response shape, citation consistency, grounded citation requirement, no-source policy, and sensitive marker leakage.
+- `QaRuntime` now executes `AnswerVerifier` after `FinalComposer` and records a low-sensitive `AnswerVerifier` tool call.
+- `QaEvalGate` provides a minimum QA gate verdict path for pass/fail/insufficient-sample outcomes; batch eval runner and workbench remain future work.
+- Evaluation Set / Run now recognize the QA answer quality path through `AI_QA_ANSWER` samples and QA metrics.
+- Verification passed: focused verifier/runtime tests (10), adjacent AI QA/evaluation/RAG tests (50), compile, and privacy grep.
+- P1 remains the next Agent/RAG slice: QA streaming and trace workbench.
+
+## 2026-06-21 QaRuntime structured answer MVP
+
+- Implemented P0-3 `QaRuntime structured answer MVP` after the P0-1 privacy guard and P0-2 memory context service.
+- `/api/ai/qa` now runs through `QaRuntime -> IntentRouter -> RagQueryService -> MemoryContextService -> ContextOrchestrator -> FinalComposer`.
+- `AiQaResponse` now includes structured answer-quality fields: `citations`, `learnerFit`, `nextSteps`, `uncertainty`, `qualityFlags`, and `requiresReview`, while preserving `sources`.
+- `toolCalls` now show low-sensitive runtime step summaries for intent, RAG, memory context, context orchestration, and final composition.
+- No-source answers do not fabricate citations; they return empty `sources/citations`, `GENERAL_FALLBACK`, `NO_COURSE_SOURCE_FALLBACK`, `uncertainty.level=MEDIUM`, `NO_SOURCE_FALLBACK`, and `requiresReview=true`.
+- Grounded answers include `COURSE_GROUNDED`, `MEMORY_CONTEXT_USED`, and `STRUCTURED_SCHEMA_V1` quality flags when memory context is available.
+- P0-4 remains the next required quality slice: citation/no-source/privacy/schema verifier plus minimum QA eval set.
+- Verification passed: `QaRuntimeTest` (2), adjacent AI QA/memory/RAG tests (32), and compile.
+
+## 2026-06-21 MemoryContextService MVP
+
+- Implemented P0-2 `MemoryContextService MVP` after the P0-1 privacy guard.
+- `MemoryContextService.build(learnerId, courseId, ragResponse, answerMode)` prepares low-sensitive learner summary, mastery/wrong-question learning signals, RAG citation contexts, learning-event recent summaries, preferences, injection reasons, and a 1200-token budget.
+- AI QA now exposes context preparation through existing `toolCalls` as `MemoryContextService/SUCCESS/contextItems=...` without changing `/api/ai/qa` request DTOs.
+- Sensitive material remains excluded from memory context: raw learner id, raw prompt, provider key, `teacher_note`, `TEACHER_NOTE`, and full citation excerpt.
+- Recent session summary is currently backed by `learning_event.summary`; durable chat session lifecycle remains a future P1/P2 task.
+- Verification passed: `MemoryContextServiceTest` (1) and `AiQaControllerTest,RagQueryServiceTest` (26).
+
+## 2026-06-21 Memory/RAG Privacy Guard
+
+- Implemented the P0-1 privacy guard before expanding long-term memory.
+- `RagQueryService` now writes hash/length metadata for questions, redacted replay snapshots, and citation reference/hash/length for durable source citations.
+- `profileSnapshot` for learning paths and resource generation now uses `profileRef` with low-sensitive fields and excludes raw `learnerId`, `teacher_note`, and `TEACHER_NOTE` source markers.
+- `ResourceAgent` receives the same minimized `profileSnapshot`; tests assert teacher notes do not enter the model context.
+- RAG requestId replay is intentionally downgraded to `RAG_REPLAY_REDACTED`; callers needing full answer text should issue a fresh requestId.
+- Verification passed: `RagQueryServiceTest` (22), `LearningWorkflowControllerTest,ResourceGenerationControllerTest` (54), and `OrchestratorWorkflowControllerTest` (33).
+
+## 2026-06-21 wiki-rag GitHub Reference
+
+- Reviewed `moodlehq/wiki-rag` as an external RAG reference.
+- Strongest reusable pattern: MediaWiki-style section relations plus post-retrieval context optimisation, especially parent/own/children context expansion and popularity-style reranking.
+- Do not directly adopt its Python/LangChain/LangGraph/Milvus/FastMCP runtime; this project should keep Java/Spring AI, roles-first RBAC, existing VectorIndexAdapter/Qdrant boundary, and project-owned Agent Trace.
+- Suggested future slice after privacy guard: `RAG POC Context Builder`, mapping wiki-rag's POC idea to course chapter, knowledge point, current chunk, previous/next chunk, and child-node context.
+- Report: `docs/research/github-references/GITHUB-20260621-wiki-rag-reference.md`.
+
+## 2026-06-21 Memory And Answer Quality Roadmap
+
+- Planned the next Agent/RAG evolution as a unified answer quality system, not a larger standalone RAG prompt.
+- The core gap is missing composition: `IntentRouter -> MemoryContextService -> ContextOrchestrator -> RAG/ToolExecutor -> AiModelGateway -> AnswerVerifier -> EvalLog`.
+- RAG memory expansion must be gated by privacy first: raw question, full answer, citation excerpt, uploaded document name, and `teacher_note` should not become durable long-term memory by default.
+- Recommended first Agent/RAG implementation slice: Memory/RAG Privacy Guard before MemoryContextService and QaRuntime.
+- Future QA eval sets should include source-required, no-source, prompt-injection, privacy-leak, cross-user-memory-leak, personalized tutoring, and multi-turn memory-drift samples.
+
+## 2026-06-11 jc-ai Reference Optimization Roadmap
+
+- Added a docs-only roadmap translating `jc-ai` RAG/Agent/evaluation/MCP/A2A examples into this project's governed optimization path.
+- RAG takeaway: current parser/vector/hybrid/citation foundations are stronger than the reference; next value is expected-source/chunk annotation, evaluation workbench, and optional governed HyDE.
+- Agent takeaway: next governance improvements should be Agent Trace scoring, structured step board, and high-risk tool approval before any MCP/A2A or external tool execution.
+- Security boundary remains unchanged: RAG must permission-filter before retrieval, answers need citations/no-source policy, tools go through Service layer, and every Agent/tool path needs trace.
+
 ## Agent Architecture
 
 - Orchestrator coordinates multi-agent workflows
@@ -35,6 +140,7 @@
 | Orchestrator runtime failure evidence | Done | `docs/specs/SPEC-20260606-orchestrator-runtime-failure-evidence.md` | Task-created `RAG_QA` runtime `ApiException` leaves safe `FAILED` workflow trace evidence and does not write query/citation success artifacts |
 | Orchestrator failure retry policy | Done | `docs/specs/SPEC-20260606-orchestrator-failure-retry-policy.md` | Generic `RuntimeException` leaves safe failed workflow evidence; owner retry is supported for `FAILED RESOURCE_GENERATION` workflows |
 | Orchestrator node contract policy | Done | `docs/specs/SPEC-20260606-orchestrator-node-contract-policy.md` | Workflow steps and recent failed steps expose input/output DTO names, failure policy, retry policy, and retryability; failed RAG/answer workflows now tell callers to resubmit original requests |
+| Memory/RAG Privacy Guard | Done | `docs/specs/SPEC-20260621-memory-rag-privacy-guard.md` | RAG logs store question hash/length, source citations store citation reference/hash/length, replay snapshots return `RAG_REPLAY_REDACTED`, and profile snapshots/ResourceAgent context exclude raw `learnerId` and `teacher_note` |
 | RAG query replay snapshot | Done | `docs/specs/SPEC-20260606-rag-query-replay-snapshot.md` | `RAG_QA` now requires `requestId` in Orchestrator, replays same-payload requests from `kb_query_log.response_json`, returns 409 on payload conflicts, and stores sanitized workflow input snapshots |
 | RAG document upload idempotency | Done | `docs/specs/SPEC-20260606-rag-document-upload-idempotency.md` | Document upload accepts optional `requestId`, replays same-payload upload responses, rejects conflicts, and avoids duplicate document/index-task rows |
 | RAG index recovery scheduler and lock | Done | `docs/specs/SPEC-20260606-rag-index-recovery-scheduler-lock.md` | Index task creation locks the document row before active-task reuse/create; scheduler recovers timed-out `RUNNING` tasks through the existing service |
@@ -49,6 +155,7 @@
 | RAG DOCX table/TOC reading-order provider | Done | `docs/specs/SPEC-20260610-p3-2-docx-table-toc-reading-order-provider.md` | DOCX POI provider and lightweight fallback now preserve paragraph/table body order, emit table sections/chunks as `TABLE_TEXT`, and skip TOC-like paragraphs; PDF layout/table/TOC, native/cloud OCR, provider confidence pipeline, and rendered page labels remain pending |
 | RAG vector embedding payload contract | Done | `docs/specs/SPEC-20260610-p3-2-vector-embedding-payload-contract.md` | `EmbeddingService` now returns in-memory document/query vectors, `IndexService` passes vectors into `VectorUpsertRequest`, and `ChunkService` uses query vectors for vector search while preserving fallback and safe metadata; consumed by the later real VectorDB adapter minimum integration |
 | RAG real VectorDB adapter minimum integration | Done | `docs/specs/SPEC-20260610-p3-2-real-vectordb-adapter-minimum-integration.md` | Qdrant-backed `VectorIndexAdapter` is available behind `learning-os.rag.vector.*`; default remains disabled/noop, payload excludes raw content/question/prompt/user/storage/secret data, and search returns only `chunkId` payload with vectors disabled; real service smoke, collection dimension validation, health/ops, and gRPC/Netty risk handling remain pending |
+| RAG VectorDB follow-up ops closure | Done | `docs/evidence/EVIDENCE-20260611-backend-followup-plan-completion.md` | `QdrantVectorExternalSmokeTest` is now a real opt-in external smoke for Qdrant collection and expected-dimension health; `/api/health` vector probe remains low-sensitivity and default tests do not external-call |
 | RAG hybrid retrieval / RRF / reranker fallback | Done | `docs/specs/SPEC-20260608-rag-hybrid-retrieval.md` | Online RAG query now retrieves within allowed KBs using keyword + recency + RRF, records vector-disabled metadata, writes stable reranker status, and falls back on timeout/error without leaking raw provider errors |
 | RAG embedding/vector adapter boundary | Done | `docs/specs/SPEC-20260608-rag-embedding-vector-adapter.md` | `EmbeddingService` batch boundary, `VectorIndexAdapter` noop boundary, index pipeline EMBEDDING/VECTOR_UPSERT stages, vector hit id-only result, allowed-KB vector filtering, and safe chunk/query metadata are implemented without new dependencies |
 | Resource generation recovery state | Done | `docs/specs/SPEC-20260606-resource-generation-recovery-state.md` | Resource generation tasks now persist retry count, next retry time, safe last error, and recoverable state for model-call failures |

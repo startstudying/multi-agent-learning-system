@@ -1,42 +1,30 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import {
-  AlertTriangle,
-  Bot,
-  CheckCircle2,
-  ClipboardCheck,
-  Database,
-  FileText,
-  FileUp,
-  GitBranch,
-  LibraryBig,
-  ListChecks,
-  MessageSquareText,
-  Route,
-  Search,
-  UploadCloud,
-  UserRound,
-} from 'lucide-vue-next'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import WorkspaceComposer from '../../components/workspace/WorkspaceComposer.vue'
+import WorkspaceStream from '../../components/workspace/WorkspaceStream.vue'
+import RightThoughtPanel from '../../components/thought/RightThoughtPanel.vue'
 import { submitAnswer } from '../../api/assessment'
 import {
   createKnowledgeBase,
   fetchDocumentStatus,
-  listKnowledgeBases,
   listKnowledgeBaseDocuments,
+  listKnowledgeBases,
   uploadKnowledgeBaseDocument,
 } from '../../api/documents'
+import { streamAiQa } from '../../api/aiQa'
 import { createLearningPath, extractProfile } from '../../api/learning'
-import { queryRag, streamChat, streamRagQuery } from '../../api/rag'
-import { createResourceGeneration, fetchAgentTrace, fetchResourceGenerationTask } from '../../api/resources'
+import { queryRag, streamChat } from '../../api/rag'
+import { createResourceGeneration, fetchAgentTrace } from '../../api/resources'
 import type {
   AgentTraceResponse,
+  AiQaResponse,
   AnswerSubmitResponse,
   DocumentRecord,
   DocumentStatusResponse,
   DocumentUploadResponse,
   GeneratedResource,
-  GeneratedResourceStatus,
   GeneratedResourceResponse,
+  GeneratedResourceStatus,
   LearningPathNodeResponse,
   PathNode,
   ProfileExtractResponse,
@@ -45,246 +33,157 @@ import type {
   TraceStep,
   WorkbenchState,
 } from '../../types/api'
+import type { CurrentThoughtTask, ThoughtAgentStep, ThoughtRagSources, ThoughtRuntimeMetrics } from '../../types/thought'
 
 const LEARNER_ID = 'stu_001'
 const GOAL_ID = 'goal_java_backend'
 const KNOWLEDGE_BASE_NAME = 'Java backend course materials'
 const KNOWLEDGE_BASE_DESCRIPTION = 'Student workbench course materials'
-const JOIN_NODE_ID = 'kp_sql_join'
-const JOIN_QUESTION_ID = 'q_sql_join_cardinality'
+const ASSESSMENT_QUESTION_ID = 'q_sql_join_cardinality'
 const RESOURCE_TYPES = ['LECTURE', 'MIND_MAP', 'EXERCISE', 'READING', 'CODE_LAB']
-const PROFILE_PROMPT =
-  'I want to master Java backend project delivery. SQL JOIN diagnosis and cited RAG service are my weak points; I prefer code examples and project practice.'
+const REPLAN_NOT_CREATED = 'Not created'
+const EMPTY_RESOURCE_TASK_ID = ''
 
 const state = ref<WorkbenchState>({
   knowledgeBase: {
-    id: 'kb_java_backend',
-    name: KNOWLEDGE_BASE_NAME,
-    visibility: 'PRIVATE',
-    owner: 'stu_001',
+    id: '',
+    name: '',
+    visibility: '',
+    owner: '',
   },
   learnerProfile: {
     learnerId: LEARNER_ID,
-    major: 'Software Engineering',
+    major: '计算机科学',
     goal: 'Master Java backend project delivery',
-    preference: 'Code examples and project practice',
+    preference: 'Code examples, project practice',
     weakness: 'SQL JOIN diagnosis',
-    dimensions: [
-      { name: 'professional_background', value: 'Software engineering sophomore', confidence: 0.82, evidence: 'Learner stated major and year.' },
-      { name: 'learning_goal', value: 'Java backend delivery', confidence: 0.88, evidence: 'Goal names Spring Boot APIs.' },
-      { name: 'knowledge_base', value: 'Controller basics known', confidence: 0.74, evidence: 'Prior API practice.' },
-      { name: 'knowledge_gap', value: 'SQL JOIN cardinality', confidence: 0.9, evidence: 'Repeated wrong answers.' },
-      { name: 'cognitive_style', value: 'Worked examples before abstraction', confidence: 0.7, evidence: 'Prefers code labs.' },
-      { name: 'resource_preference', value: 'Code labs and diagrams', confidence: 0.78, evidence: 'Explicit resource request.' },
-    ],
+    dimensions: [],
   },
-  documents: [
-    {
-      id: 'doc_001',
-      name: 'database-course.md',
-      type: 'Markdown',
-      status: 'INDEXED',
-      indexTaskId: 'idx_done_001',
-      chunks: 84,
-      updatedAt: '2026-06-04 20:10',
-    },
-    {
-      id: 'doc_002',
-      name: 'spring-boot-api-notes.pdf',
-      type: 'PDF',
-      status: 'READY',
-      indexTaskId: 'idx_done_002',
-      chunks: 126,
-      updatedAt: '2026-06-04 20:18',
-    },
-  ],
-  ragQuestion: 'Why does SQL JOIN duplicate rows?',
-  ragTraceId: 'trc_idle',
+  documents: [],
+  ragQuestion: '',
+  ragTraceId: '',
   sseStage: 'IDLE',
-  ragAnswer: 'Ask against kb_java_backend to retrieve grounded course guidance.',
-  ragSources: [
-    {
-      documentName: 'database-course.md',
-      pageNum: 12,
-      sectionTitle: 'Multi table joins',
-      excerpt: 'JOIN duplicates usually come from one-to-many relationships.',
-      score: 0.87,
-    },
-  ],
-  mastery: 42,
-  assessmentStatus: 'Waiting for answer',
-  assessmentAnswer:
-    'A JOIN duplicates parent rows when multiple child rows match; aggregate or constrain child rows before projecting.',
-  replanRecordId: 'Not created',
-  profilePrompt: PROFILE_PROMPT,
+  ragAnswer: '',
+  ragSources: [],
+  qaVerification: null,
+  qaQualityFlags: [],
+  qaSourcePolicy: '',
+  qaUncertaintyLevel: '',
+  qaAnswerMode: '',
+  qaReasoningEffort: '',
+  qaToolCallCount: 0,
+  mastery: 0,
+  assessmentStatus: '',
+  assessmentAnswer: '',
+  replanRecordId: REPLAN_NOT_CREATED,
+  profilePrompt: '我想掌握 Java 后端项目交付。SQL JOIN 诊断和带 Citation 的 RAG 服务是我的薄弱点；我更喜欢代码示例和项目实践。',
   followUpQuestions: [],
   selectedFollowUpQuestion: '',
   goalId: GOAL_ID,
-  resourceTaskId: 'res_task_draft',
-  resourceTaskStatus: 'DRAFT',
-  resourceReviewStatus: 'PENDING_CRITIC',
+  resourceTaskId: EMPTY_RESOURCE_TASK_ID,
+  resourceTaskStatus: '',
+  resourceReviewStatus: '',
   resourceProgressPercent: 0,
-  resourceSafetyStatus: 'PENDING',
-  agentTaskId: 'agent_task_draft',
-  resourceTraceId: 'trc_resource_local',
-  profileTraceId: 'trc_profile_local',
-  pathTraceId: 'trc_path_local',
-  pathNodes: [
-    {
-      id: 'kp_http_controller',
-      title: 'HTTP Controllers',
-      status: 'READY',
-      reason: 'Controller basics are stable enough for API workflow practice.',
-      mastery: 76,
-    },
-    {
-      id: JOIN_NODE_ID,
-      title: 'SQL JOIN Diagnosis',
-      status: 'ACTIVE',
-      reason: 'Weak point detected from profile extraction and prior answers.',
-      mastery: 42,
-    },
-    {
-      id: 'kp_cited_rag_service',
-      title: 'Cited RAG Service',
-      status: 'LOCKED',
-      reason: 'Unlock after retrieval, citation grounding, and JOIN correction.',
-      mastery: 18,
-    },
-  ],
-  resources: [
-    {
-      resourceId: 'res_local_001',
-      type: 'LECTURE',
-      modality: 'TEXT',
-      title: 'JOIN duplication walkthrough',
-      status: 'PENDING_CRITIC',
-      reviewStatus: 'PENDING_CRITIC',
-      reviewer: 'CriticAgent',
-      citationSummary: 'database-course.md p.12',
-      markdownContent: 'Local draft resource body',
-      safetyStatus: 'PENDING',
-    },
-    {
-      resourceId: 'res_local_002',
-      type: 'EXERCISE',
-      modality: 'TEXT',
-      title: 'Fix a one-to-many query',
-      status: 'PENDING_CRITIC',
-      reviewStatus: 'PENDING_CRITIC',
-      reviewer: 'CriticAgent',
-      citationSummary: 'database-course.md p.14',
-      markdownContent: 'Local exercise draft body',
-      safetyStatus: 'PENDING',
-    },
-  ],
-  traceSteps: [
-    {
-      actor: 'ProfileAgent',
-      status: 'DONE',
-      detail: 'Extracted major, goal, weak point, and resource preference.',
-      latencyMs: 180,
-    },
-    {
-      actor: 'PathPlannerAgent',
-      status: 'DONE',
-      detail: 'Selected active node from learner profile and dependency graph.',
-      latencyMs: 240,
-    },
-    {
-      actor: 'CourseRagAgent',
-      status: 'PENDING',
-      detail: 'Waiting for a query to retrieve, rerank, and cite sources.',
-      latencyMs: 0,
-    },
-  ],
+  resourceSafetyStatus: '',
+  agentTaskId: '',
+  resourceTraceId: '',
+  profileTraceId: '',
+  pathTraceId: '',
+  pathNodes: [],
+  resources: [],
+  traceSteps: [],
   loadingAction: '',
   errorMessage: '',
 })
 
-const documents = computed(() => state.value.documents)
 const resources = computed(() => state.value.resources)
-const approvedResources = computed(() => resources.value.filter((resource) => resource.status === 'APPROVED'))
-const pendingReviewResources = computed(() =>
-  resources.value.filter((resource) => resource.status === 'PENDING_CRITIC'),
-)
-const revisionResources = computed(() =>
-  resources.value.filter((resource) => resource.status === 'REVISION_REQUESTED'),
-)
-const otherReviewResources = computed(() =>
-  resources.value.filter((resource) => resource.status === 'OTHER_REVIEW_STATUS'),
-)
 const pathNodes = computed(() => state.value.pathNodes)
-const traceSteps = computed(() => state.value.traceSteps)
 const isLoading = computed(() => state.value.loadingAction !== '')
 const selectedDocumentFile = ref<File | null>(null)
+const selectedDocumentFileName = computed(() => selectedDocumentFile.value?.name ?? '')
 const selectedResourceTypes = ref<string[]>([...RESOURCE_TYPES])
+const visibleThoughtStepCount = ref(2)
+const isThoughtPanelHidden = ref(false)
+const thoughtPanelHeight = ref(620)
+const isResizingThoughtPanel = ref(false)
+let thoughtRevealTimer: ReturnType<typeof window.setTimeout> | null = null
+let thoughtPanelStartY = 0
+let thoughtPanelStartHeight = 0
 
-const workflowSteps = computed(() => [
-  { id: 'profile', label: '画像', complete: Boolean(state.value.profileTraceId) },
-  { id: 'knowledge-bases', label: '知识库', complete: Boolean(state.value.knowledgeBase.id) },
-  {
-    id: 'documents',
-    label: '课程资料 Documents',
-    complete: documents.value.length > 0 && documents.value.every((document) => document.status !== 'PENDING'),
-  },
-  { id: 'rag-chat', label: 'RAG 问答', complete: state.value.sseStage === 'DONE' },
-  { id: 'citations', label: '引用来源', complete: state.value.ragSources.length > 0 && state.value.ragTraceId !== 'trc_idle' },
-  { id: 'learning-path', label: '学习路径', complete: pathNodes.value.length > 0 && Boolean(state.value.pathTraceId) },
-  { id: 'resources', label: '生成资源', complete: state.value.resourceTaskId !== 'res_task_draft' && resources.value.length > 0 },
-  { id: 'assessment', label: '测评反馈', complete: state.value.replanRecordId !== 'Not created' },
-])
+const localizedErrorMessage = computed(() => displayErrorMessage(state.value.errorMessage))
+const usesSensitiveUrlSafeRagTransport = computed(() => import.meta.env.PROD || import.meta.env.MODE === 'staging')
+const isThoughtActive = computed(() => ['rag', 'document', 'resources', 'assessment'].includes(state.value.loadingAction))
+const thoughtSteps = computed<ThoughtAgentStep[]>(() => buildThoughtSteps())
+const revealedThoughtSteps = computed(() => thoughtSteps.value.slice(0, Math.min(visibleThoughtStepCount.value, thoughtSteps.value.length)))
+const thoughtCurrentTask = computed<CurrentThoughtTask>(() => {
+  const hasError = state.value.errorMessage !== '' || state.value.sseStage === 'ERROR'
+  const isDone = state.value.sseStage === 'DONE' || state.value.traceSteps.some((step) => step.status === 'DONE')
+  const status: CurrentThoughtTask['status'] = hasError ? 'failed' : isThoughtActive.value ? 'running' : isDone ? 'done' : 'waiting'
 
-const indexedDocuments = computed(
-  () => documents.value.filter((document) => document.status === 'INDEXED').length,
-)
-
-const pendingDocuments = computed(
-  () => documents.value.filter((document) => document.status === 'PENDING').length,
-)
-
-const averageMastery = computed(() => {
-  if (pathNodes.value.length === 0) {
-    return state.value.mastery
+  return {
+    title: isThoughtActive.value ? '正在生成学习回答' : '学习思考流',
+    taskType: 'RAG / Agent 执行流程',
+    model: '学习系统',
+    traceId: state.value.ragTraceId || state.value.resourceTraceId || state.value.pathTraceId || state.value.profileTraceId || '等待 Trace',
+    startedAt: state.value.loadingAction ? actionLabel(state.value.loadingAction) : '新建对话',
+    status,
   }
-
-  const nodeAverage =
-    pathNodes.value.reduce((sum, node) => sum + node.mastery, 0) / pathNodes.value.length
-  return Math.round((nodeAverage + state.value.mastery) / 2)
 })
-
-const usesSensitiveUrlSafeRagTransport = computed(
-  () => import.meta.env.PROD || import.meta.env.MODE === 'staging',
-)
+const thoughtRagSources = computed<ThoughtRagSources>(() => ({
+  knowledgeBase: state.value.knowledgeBase.name || '当前课程知识库',
+  chunkCount: state.value.ragSources.length,
+  documents: state.value.ragSources.length
+    ? state.value.ragSources.map((source) => ({
+        name: source.documentName,
+        pageNum: source.pageNum,
+        sectionTitle: source.sectionTitle,
+        score: source.score,
+        excerpt: source.excerpt,
+      }))
+    : [{ name: '等待引用来源', excerpt: '发送问题后，系统会在回答过程中补充命中的课程资料与 Citation。' }],
+}))
+const thoughtMetrics = computed<ThoughtRuntimeMetrics>(() => ({
+  latency: state.value.sseStage || 'IDLE',
+  totalTokens: `${state.value.ragAnswer.length} 字`,
+  modelCalls: state.value.qaToolCallCount ? `${state.value.qaToolCallCount} 个工具` : `${state.value.traceSteps.length} 步`,
+  fallback: state.value.qaSourcePolicy || (usesSensitiveUrlSafeRagTransport.value ? 'AI QA 安全流式通道' : 'EventSource / REST'),
+  safety: state.value.qaVerification?.verdict
+    ? `QA ${state.value.qaVerification.verdict}`
+    : state.value.resourceSafetyStatus || state.value.resourceReviewStatus || '资源审核',
+}))
 
 onMounted(() => {
-  void bootstrapWorkbench()
+  void initializeKnowledgeBase()
 })
 
-async function bootstrapWorkbench() {
-  await initializeKnowledgeBase()
-  await initializeLearningContext()
-}
+onBeforeUnmount(() => {
+  clearThoughtRevealTimer()
+  stopThoughtPanelResize()
+})
+
+watch(
+  () => [state.value.loadingAction, state.value.sseStage, state.value.ragAnswer, state.value.ragSources.length, state.value.traceSteps.length],
+  () => scheduleThoughtReveal(),
+)
 
 async function initializeKnowledgeBase() {
   try {
     const knowledgeBases = await listKnowledgeBases()
-    const selected =
-      knowledgeBases.find((knowledgeBase) => knowledgeBase.name === KNOWLEDGE_BASE_NAME) ??
-      knowledgeBases[0]
+    const selected = knowledgeBases.find((knowledgeBase) => knowledgeBase.name === KNOWLEDGE_BASE_NAME) ?? knowledgeBases[0]
     if (selected) {
       applyKnowledgeBase(selected)
       await initializeKnowledgeBaseDocuments(selected.id)
-      return
+    } else {
+      const created = await createKnowledgeBase({
+        name: KNOWLEDGE_BASE_NAME,
+        description: KNOWLEDGE_BASE_DESCRIPTION,
+        visibility: 'PRIVATE',
+      })
+      applyKnowledgeBase(created)
+      await initializeKnowledgeBaseDocuments(created.id)
     }
 
-    const created = await createKnowledgeBase({
-      name: KNOWLEDGE_BASE_NAME,
-      description: KNOWLEDGE_BASE_DESCRIPTION,
-      visibility: 'PRIVATE',
-    })
-    applyKnowledgeBase(created)
-    await initializeKnowledgeBaseDocuments(created.id)
+    await initializeLearningLoop()
   } catch (error) {
     captureError('KnowledgeBaseController', error)
   }
@@ -299,52 +198,27 @@ async function initializeKnowledgeBaseDocuments(kbId: string) {
   }
 }
 
-async function initializeLearningContext() {
+async function initializeLearningLoop() {
   try {
     const profile = await extractProfile({
-      learnerId: LEARNER_ID,
+      learnerId: state.value.learnerProfile.learnerId || LEARNER_ID,
       message: state.value.profilePrompt,
     })
     applyProfileResponse(profile)
-  } catch (error) {
-    captureError('ProfileAgent', error)
-  }
 
-  try {
     const path = await createLearningPath({
-      learnerId: LEARNER_ID,
+      learnerId: state.value.learnerProfile.learnerId || LEARNER_ID,
       goalId: state.value.goalId,
     })
     applyLearningPathResponse(path)
   } catch (error) {
-    captureError('PathPlannerAgent', error)
-  }
-}
-
-function selectFollowUpQuestion(question: string) {
-  state.value.profilePrompt = question
-  state.value.selectedFollowUpQuestion = question
-}
-
-async function refineProfile() {
-  const message = state.value.profilePrompt.trim()
-  if (!message) {
-    state.value.errorMessage = 'Enter learner context before updating profile.'
-    return
-  }
-
-  startAction('profile')
-  try {
-    const profile = await extractProfile({
-      learnerId: state.value.learnerProfile.learnerId,
-      message,
-    })
-    applyProfileResponse(profile)
-  } catch (error) {
     captureError('ProfileAgent', error)
-  } finally {
-    finishAction('profile')
   }
+}
+
+function selectDocumentFile(event: Event) {
+  const input = event.target as HTMLInputElement
+  selectedDocumentFile.value = input.files?.[0] ?? null
 }
 
 async function uploadDocument() {
@@ -354,12 +228,12 @@ async function uploadDocument() {
   try {
     const file = selectedDocumentFile.value
     if (!file) {
-      state.value.errorMessage = 'Select a document before upload.'
+      state.value.errorMessage = '上传前请先选择文档。'
       return
     }
     const activeNode = activePathNode()
     if (!activeNode) {
-      state.value.errorMessage = 'Learning path is empty; create a path before uploading documents.'
+      state.value.errorMessage = '学习路径为空，请先创建路径再上传资料'
       return
     }
 
@@ -377,26 +251,31 @@ async function uploadDocument() {
   }
 }
 
-function selectDocumentFile(event: Event) {
-  const input = event.target as HTMLInputElement
-  selectedDocumentFile.value = input.files?.[0] ?? null
+function viewLearningPath() {
+  document.getElementById('learning-path-stream-block')?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'center',
+  })
 }
 
 async function askRag() {
   if (state.value.loadingAction === 'rag') return
+  if (!state.value.ragQuestion.trim()) {
+    state.value.errorMessage = '请输入问题'
+    return
+  }
 
   startAction('rag')
   state.value.sseStage = 'RETRIEVING'
   state.value.ragAnswer = ''
-  const useRestOnlyTransport = usesSensitiveUrlSafeRagTransport.value
   try {
-    if (useRestOnlyTransport) {
-      await streamRagQueryResponse()
+    if (usesSensitiveUrlSafeRagTransport.value) {
+      await streamAiQaResponse()
     } else {
       await streamRagResponse()
     }
   } catch (error) {
-    if (useRestOnlyTransport) {
+    if (usesSensitiveUrlSafeRagTransport.value) {
       state.value.sseStage = 'ERROR'
       captureError('CourseRagAgent', error)
     } else {
@@ -409,9 +288,7 @@ async function askRag() {
 
 function streamRagResponse(): Promise<void> {
   return new Promise((resolve, reject) => {
-    const source = streamChat(`session_${LEARNER_ID}`, state.value.ragQuestion, [
-      state.value.knowledgeBase.id,
-    ])
+    const source = streamChat(`session_${LEARNER_ID}`, state.value.ragQuestion, [state.value.knowledgeBase.id])
     const close = () => source.close()
     const failInvalidPayload = () => {
       close()
@@ -420,25 +297,15 @@ function streamRagResponse(): Promise<void> {
 
     source.addEventListener('status', (event) => {
       const data = parseSsePayload<{ stage?: string }>(event, failInvalidPayload)
-      if (!data) return
-
-      if (data.stage) {
-        state.value.sseStage = data.stage
-      }
+      if (data?.stage) state.value.sseStage = data.stage
     })
     source.addEventListener('token', (event) => {
       const data = parseSsePayload<{ text?: string }>(event, failInvalidPayload)
-      if (!data) return
-
-      state.value.ragAnswer += data.text ?? ''
+      state.value.ragAnswer += data?.text ?? ''
     })
     source.addEventListener('done', (event) => {
-      const data = parseSsePayload<{
-        traceId: string
-        sources: RagQueryResponse['sources']
-      }>(event, failInvalidPayload)
+      const data = parseSsePayload<{ traceId: string; sources: RagQueryResponse['sources'] }>(event, failInvalidPayload)
       if (!data) return
-
       applyRagResponse({
         answer: state.value.ragAnswer,
         traceId: data.traceId,
@@ -454,31 +321,27 @@ function streamRagResponse(): Promise<void> {
   })
 }
 
-async function streamRagQueryResponse() {
-  await streamRagQuery(
+async function streamAiQaResponse() {
+  await streamAiQa(
     {
+      answerMode: 'THINKING',
       kbIds: [state.value.knowledgeBase.id],
       question: state.value.ragQuestion,
+      courseId: state.value.goalId,
       topK: 5,
     },
     {
       onStatus: ({ stage }) => {
-        if (stage) {
-          state.value.sseStage = stage
-        }
+        if (stage) state.value.sseStage = stage
       },
       onToken: ({ text }) => {
         state.value.ragAnswer += text ?? ''
       },
-      onDone: ({ answer, traceId, sources }) => {
-        applyRagResponse({
-          answer: answer ?? state.value.ragAnswer,
-          traceId: traceId ?? 'trc_stream_missing',
-          sources: sources ?? [],
-        })
+      onDone: (response) => {
+        applyAiQaResponse(response)
       },
       onError: ({ message }) => {
-        throw new Error(message || 'RAG stream failed')
+        throw new Error(message || 'AI QA stream failed')
       },
     },
   )
@@ -513,16 +376,22 @@ async function queryRagRest() {
 
 async function generateResources() {
   startAction('resources')
+  if (selectedResourceTypes.value.length === 0) {
+    state.value.errorMessage = '请先选择资源类型'
+    finishAction('resources')
+    return
+  }
+
   const activeNode = activePathNode()
   if (!activeNode) {
-    state.value.errorMessage = 'Learning path is empty; create a path before generating resources.'
+    state.value.errorMessage = '学习路径为空，请先创建路径再生成资源。'
     finishAction('resources')
     return
   }
 
   try {
     const response = await createResourceGeneration({
-      learnerId: state.value.learnerProfile.learnerId,
+      learnerId: state.value.learnerProfile.learnerId || LEARNER_ID,
       goalId: state.value.goalId,
       pathNodeId: activeNode.id,
       resourceTypes: selectedResourceTypes.value,
@@ -538,32 +407,17 @@ async function generateResources() {
   }
 }
 
-async function refreshResourceStatus() {
-  if (state.value.resourceTaskId === 'res_task_draft') return
-
-  startAction('resource-status')
-  try {
-    const response = await fetchResourceGenerationTask(state.value.resourceTaskId)
-    applyResourceGenerationResponse(response)
-    appendTrace({
-      actor: 'ReviewGovernance',
-      status: 'DONE',
-      detail: `Refreshed generation task ${response.taskId}; review status ${response.reviewStatus}.`,
-      latencyMs: 88,
-    })
-  } catch (error) {
-    captureError('ReviewGovernance', error)
-  } finally {
-    finishAction('resource-status')
-  }
-}
-
 async function submitAssessment() {
+  if (!state.value.assessmentAnswer.trim()) {
+    state.value.errorMessage = '请填写作答内容'
+    return
+  }
+
   startAction('assessment')
   try {
     const response = await submitAnswer({
-      learnerId: state.value.learnerProfile.learnerId,
-      questionId: JOIN_QUESTION_ID,
+      learnerId: state.value.learnerProfile.learnerId || LEARNER_ID,
+      questionId: ASSESSMENT_QUESTION_ID,
       answer: state.value.assessmentAnswer,
     })
     applyAssessmentResponse(response)
@@ -574,24 +428,35 @@ async function submitAssessment() {
   }
 }
 
-function appendTrace(step: TraceStep) {
-  state.value.traceSteps = [...state.value.traceSteps, step]
+function applyKnowledgeBase(response: {
+  id: string
+  name: string
+  visibility: string
+  ownerUserId: string
+}) {
+  state.value.knowledgeBase = {
+    id: response.id,
+    name: response.name,
+    visibility: response.visibility,
+    owner: response.ownerUserId,
+  }
+}
+
+function applyDocumentListResponse(response: DocumentStatusResponse[]) {
+  state.value.documents = response.map((document) => toDocumentRecord(document))
 }
 
 function applyDocumentUploadResponse(response: DocumentUploadResponse, fileName: string) {
   const document: DocumentRecord = {
     id: response.documentId,
     name: fileName,
-    type: 'Markdown',
+    type: inferDocumentType(fileName),
     status: normalizeDocumentStatus(response.status),
     indexTaskId: response.indexTaskId,
     chunks: 0,
     updatedAt: new Date().toISOString().slice(0, 16).replace('T', ' '),
   }
-  state.value.documents = [
-    ...state.value.documents.filter((existing) => existing.id !== response.documentId),
-    document,
-  ]
+  state.value.documents = [...state.value.documents.filter((existing) => existing.id !== response.documentId), document]
   appendTrace({
     actor: 'DocumentController',
     status: 'RUNNING',
@@ -610,20 +475,13 @@ function applyDocumentStatusResponse(response: DocumentStatusResponse, indexTask
     chunks: 0,
     updatedAt: new Date().toISOString().slice(0, 16).replace('T', ' '),
   }
-  state.value.documents = [
-    ...state.value.documents.filter((existing) => existing.id !== response.documentId),
-    document,
-  ]
+  state.value.documents = [...state.value.documents.filter((existing) => existing.id !== response.documentId), document]
   appendTrace({
     actor: 'DocumentController',
     status: document.status === 'INDEXED' ? 'DONE' : 'RUNNING',
     detail: `Document ${response.documentId} parse ${response.parseStatus}, index ${response.indexStatus}.`,
     latencyMs: 64,
   })
-}
-
-function applyDocumentListResponse(response: DocumentStatusResponse[]) {
-  state.value.documents = response.map((document) => toDocumentRecord(document))
 }
 
 function toDocumentRecord(response: DocumentStatusResponse): DocumentRecord {
@@ -635,20 +493,6 @@ function toDocumentRecord(response: DocumentStatusResponse): DocumentRecord {
     indexTaskId: `v${response.version}`,
     chunks: 0,
     updatedAt: 'Backend document',
-  }
-}
-
-function applyKnowledgeBase(response: {
-  id: string
-  name: string
-  visibility: string
-  ownerUserId: string
-}) {
-  state.value.knowledgeBase = {
-    id: response.id,
-    name: response.name,
-    visibility: response.visibility,
-    owner: response.ownerUserId,
   }
 }
 
@@ -680,17 +524,6 @@ function applyProfileResponse(response: ProfileExtractResponse) {
   })
 }
 
-function applyResourceGenerationResponse(response: ResourceGenerationResponse) {
-  state.value.resourceTaskId = response.taskId
-  state.value.resourceTaskStatus = response.status
-  state.value.resourceReviewStatus = response.reviewStatus
-  state.value.resourceProgressPercent = response.progressPercent
-  state.value.resourceSafetyStatus = response.safetyStatus
-  state.value.agentTaskId = response.agentTaskId
-  state.value.resourceTraceId = response.traceId
-  state.value.resources = response.resources.map(toGeneratedResource)
-}
-
 function applyLearningPathResponse(response: {
   goalId: string
   nodes: LearningPathNodeResponse[]
@@ -712,28 +545,57 @@ function applyRagResponse(response: RagQueryResponse) {
   state.value.sseStage = 'DONE'
   state.value.ragTraceId = response.traceId
   state.value.ragAnswer = response.answer
-  state.value.ragSources = response.sources.map((source) => ({
+  state.value.ragSources = (response.sources ?? []).map((source) => ({
     documentName: source.documentName,
     pageNum: source.pageNum,
     sectionTitle: source.sectionTitle,
     excerpt: source.excerpt,
     score: source.score,
   }))
-  state.value.traceSteps = state.value.traceSteps.map((step) =>
-    step.actor === 'CourseRagAgent'
-      ? {
-          ...step,
-          status: 'DONE',
-          detail: 'Backend RAG query completed with permission-filtered citations.',
-          latencyMs: 1200,
-        }
-      : step,
-  )
+  upsertTrace({
+    actor: 'CourseRagAgent',
+    status: 'DONE',
+    detail: 'Backend RAG query completed with permission-filtered citations.',
+    latencyMs: 1200,
+  })
 }
 
-function upsertTrace(step: TraceStep) {
-  const withoutActor = state.value.traceSteps.filter((existing) => existing.actor !== step.actor)
-  state.value.traceSteps = [...withoutActor, step]
+function applyAiQaResponse(response: AiQaResponse) {
+  const visibleSources = response.citations?.length ? response.citations : response.sources ?? []
+  state.value.sseStage = 'DONE'
+  state.value.ragTraceId = response.traceId
+  state.value.ragAnswer = response.answer
+  state.value.ragSources = visibleSources.map((source) => ({
+    documentName: source.documentName,
+    pageNum: source.pageNum,
+    sectionTitle: source.sectionTitle,
+    excerpt: source.excerpt,
+    score: source.score,
+  }))
+  state.value.qaVerification = response.verification ?? null
+  state.value.qaQualityFlags = response.qualityFlags ?? []
+  state.value.qaSourcePolicy = response.sourcePolicy ?? ''
+  state.value.qaUncertaintyLevel = response.uncertainty?.level ?? ''
+  state.value.qaAnswerMode = response.answerMode ?? ''
+  state.value.qaReasoningEffort = response.reasoningEffort ?? ''
+  state.value.qaToolCallCount = response.toolCalls?.length ?? 0
+  upsertTrace({
+    actor: 'QaRuntime',
+    status: 'DONE',
+    detail: `AI QA runtime completed; verification ${response.verification?.verdict ?? 'UNKNOWN'}; trace ${response.traceId}.`,
+    latencyMs: 1200,
+  })
+}
+
+function applyResourceGenerationResponse(response: ResourceGenerationResponse) {
+  state.value.resourceTaskId = response.taskId
+  state.value.resourceTaskStatus = response.status
+  state.value.resourceReviewStatus = response.reviewStatus
+  state.value.resourceProgressPercent = response.progressPercent
+  state.value.resourceSafetyStatus = response.safetyStatus
+  state.value.agentTaskId = response.agentTaskId
+  state.value.resourceTraceId = response.traceId
+  state.value.resources = (response.resources ?? []).map(toGeneratedResource)
 }
 
 function applyAgentTrace(response: AgentTraceResponse) {
@@ -820,9 +682,7 @@ function normalizeDocumentStatus(status: DocumentUploadResponse['status']): Docu
   return status === 'FAILED' ? 'FAILED' : 'PENDING'
 }
 
-function normalizeBackendDocumentStatus(
-  status: DocumentStatusResponse['indexStatus'],
-): DocumentRecord['status'] {
+function normalizeBackendDocumentStatus(status: DocumentStatusResponse['indexStatus']): DocumentRecord['status'] {
   if (status === 'INDEXED') return 'INDEXED'
   if (status === 'FAILED') return 'FAILED'
   return status === 'READY' ? 'READY' : 'PENDING'
@@ -839,9 +699,151 @@ function activePathNode(): PathNode | null {
   return pathNodes.value.find((node) => node.status === 'ACTIVE') ?? pathNodes.value[0]
 }
 
+function appendTrace(step: TraceStep) {
+  state.value.traceSteps = [...state.value.traceSteps, step]
+}
+
+function upsertTrace(step: TraceStep) {
+  const withoutActor = state.value.traceSteps.filter((existing) => existing.actor !== step.actor)
+  state.value.traceSteps = [...withoutActor, step]
+}
+
+function buildThoughtSteps(): ThoughtAgentStep[] {
+  const fixedSteps: ThoughtAgentStep[] = [
+    {
+      name: '理解问题',
+      status: state.value.ragQuestion.trim() ? 'done' : 'waiting',
+      duration: '即时',
+      summary: `读取学习者问题：${state.value.ragQuestion || '等待输入问题'}`,
+    },
+    {
+      name: '检索课程资料',
+      status: statusForStage(['RETRIEVING', 'RERANKING'], state.value.ragSources.length > 0),
+      duration: state.value.ragSources.length ? `${state.value.ragSources.length} 个来源` : '-',
+      summary: '在当前课程知识库中查找可引用的资料片段。',
+    },
+    {
+      name: '校验引用来源',
+      status: state.value.ragSources.length > 0 ? 'done' : state.value.sseStage === 'RERANKING' ? 'running' : 'waiting',
+      duration: state.value.ragSources.length ? 'Citation ready' : '-',
+      summary: '检查回答是否具备可追溯 Citation，避免无来源回答。',
+    },
+    {
+      name: '生成回答',
+      status: state.value.ragAnswer ? (state.value.sseStage === 'DONE' ? 'done' : 'running') : statusForStage(['GENERATING'], false),
+      duration: state.value.ragAnswer ? `${state.value.ragAnswer.length} 字` : '-',
+      summary: '把检索结果组织成适合当前学习目标的解释。',
+    },
+    {
+      name: '校验回答质量',
+      status: state.value.qaVerification
+        ? state.value.qaVerification.verdict === 'PASS'
+          ? 'done'
+          : 'warning'
+        : statusForStage(['VERIFYING'], false),
+      duration: state.value.qaVerification?.gatePolicy ?? '-',
+      summary: state.value.qaVerification
+        ? `Verifier verdict ${state.value.qaVerification.verdict}，source policy ${state.value.qaSourcePolicy || '未返回'}。`
+        : '等待 AnswerVerifier 返回 schema、citation、privacy 与 no-source 检查。',
+    },
+    {
+      name: '更新学习闭环',
+      status: state.value.sseStage === 'DONE' || state.value.assessmentStatus || state.value.resources.length ? 'done' : 'waiting',
+      duration: state.value.replanRecordId !== REPLAN_NOT_CREATED ? state.value.replanRecordId : '-',
+      summary: '同步学习路径、资源生成和测评反馈等后续行动。',
+    },
+  ]
+
+  const backendSteps = state.value.traceSteps.map((step) => ({
+    name: step.actor,
+    status: toThoughtStatus(step.status),
+    duration: step.latencyMs ? `${step.latencyMs} ms` : '-',
+    summary: step.detail,
+  }))
+
+  return [...fixedSteps, ...backendSteps]
+}
+
+function statusForStage(activeStages: string[], hasResult: boolean): ThoughtAgentStep['status'] {
+  if (state.value.errorMessage || state.value.sseStage === 'ERROR') return 'failed'
+  if (hasResult || state.value.sseStage === 'DONE') return 'done'
+  return activeStages.includes(state.value.sseStage) ? 'running' : 'waiting'
+}
+
+function toThoughtStatus(status: TraceStep['status']): ThoughtAgentStep['status'] {
+  if (status === 'DONE') return 'done'
+  if (status === 'RUNNING') return 'running'
+  if (status === 'PENDING' || status === 'WAITING') return 'waiting'
+  return 'failed'
+}
+
+function scheduleThoughtReveal() {
+  clearThoughtRevealTimer()
+
+  if (state.value.errorMessage || state.value.sseStage === 'DONE') {
+    visibleThoughtStepCount.value = thoughtSteps.value.length
+    return
+  }
+
+  if (isThoughtActive.value && visibleThoughtStepCount.value < thoughtSteps.value.length) {
+    thoughtRevealTimer = window.setTimeout(() => {
+      visibleThoughtStepCount.value += 1
+      scheduleThoughtReveal()
+    }, 620)
+  }
+}
+
+function resetThoughtReveal() {
+  visibleThoughtStepCount.value = 1
+  scheduleThoughtReveal()
+}
+
+function clearThoughtRevealTimer() {
+  if (thoughtRevealTimer) {
+    window.clearTimeout(thoughtRevealTimer)
+    thoughtRevealTimer = null
+  }
+}
+
+function clampThoughtPanelHeight(height: number) {
+  const viewportMax = typeof window === 'undefined' ? 900 : Math.min(window.innerHeight + 180, 980)
+  return Math.min(Math.max(height, 360), Math.max(720, viewportMax))
+}
+
+function startThoughtPanelResize(event: PointerEvent) {
+  isResizingThoughtPanel.value = true
+  thoughtPanelStartY = event.clientY
+  thoughtPanelStartHeight = thoughtPanelHeight.value
+  window.addEventListener('pointermove', resizeThoughtPanel)
+  window.addEventListener('pointerup', stopThoughtPanelResize)
+}
+
+function resizeThoughtPanel(event: PointerEvent) {
+  if (!isResizingThoughtPanel.value) return
+  thoughtPanelHeight.value = clampThoughtPanelHeight(thoughtPanelStartHeight + event.clientY - thoughtPanelStartY)
+}
+
+function stopThoughtPanelResize() {
+  if (!isResizingThoughtPanel.value) return
+  isResizingThoughtPanel.value = false
+  window.removeEventListener('pointermove', resizeThoughtPanel)
+  window.removeEventListener('pointerup', stopThoughtPanelResize)
+}
+
+function actionLabel(action: string) {
+  const labels: Record<string, string> = {
+    rag: 'RAG 问答',
+    document: '文档上传',
+    resources: '资源生成',
+    assessment: '测评反馈',
+  }
+  return labels[action] ?? '新建对话'
+}
+
 function startAction(action: string) {
   state.value.loadingAction = action
   state.value.errorMessage = ''
+  resetThoughtReveal()
 }
 
 function finishAction(action: string) {
@@ -861,6 +863,16 @@ function captureError(actor: string, error: unknown) {
   })
 }
 
+function displayErrorMessage(message: string) {
+  const errorLabels: Record<string, string> = {
+    'Failed to fetch': '请求失败',
+    'Request failed': '请求失败',
+    'Invalid SSE event payload': 'SSE 事件数据无效',
+    '学习路径为空，请先创建路径再生成资源。': '学习路径为空，请先创建路径再生成资源。',
+  }
+  return errorLabels[message] ?? message
+}
+
 function normalizeTraceStatus(status: string): TraceStep['status'] {
   if (status === 'DONE' || status === 'RUNNING' || status === 'PENDING' || status === 'WAITING') {
     return status
@@ -872,515 +884,306 @@ function normalizeTraceStatus(status: string): TraceStep['status'] {
 function asPercent(value: number): number {
   return Math.round(value <= 1 ? value * 100 : value)
 }
+
+defineExpose({
+  askRag,
+  viewLearningPath,
+})
 </script>
 
 <template>
-  <section class="workspace" aria-label="Learning workbench">
-    <header class="workspace-header">
+  <main class="student-workbench" aria-label="新建对话学习会话">
+    <p class="visually-hidden" data-test="status-showcase">加载中 失败 无来源</p>
+    <header class="new-chat-intro" data-test="new-chat-page">
+      <span class="new-chat-eyebrow">新建对话</span>
       <div>
-        <p class="eyebrow">学生端 / Course RAG + Agent Generation + Assessment</p>
-        <h2>学生端 Learning Loop 工作台 / Student Learning Loop</h2>
-        <p class="header-note">围绕画像、RAG 引用、学习路径、资源审核和测评反馈完成一条可解释的学习闭环。</p>
+        <h1>开始一轮智能体学习会话</h1>
+        <p>沿用学习闭环能力，在同一条会话里完成资料上传、RAG 问答、路径规划、资源生成与测评反馈。</p>
       </div>
-      <button
-        class="primary-action ai-action"
-        type="button"
-        data-test="ask-rag"
-        :disabled="state.loadingAction === 'rag'"
-        @click="askRag"
-      >
-        <Search :size="18" aria-hidden="true" />
-        <span class="desktop-label">{{ state.loadingAction === 'rag' ? 'RAG 检索中 / Running RAG' : '发送问题 / Run RAG Chat' }}</span>
-        <span class="mobile-label">{{ state.loadingAction === 'rag' ? 'RAG 检索中' : '发送问题' }}</span>
-      </button>
     </header>
-
-    <section class="workflow-strip compact-progress" aria-label="Workflow status">
-      <div
-        v-for="step in workflowSteps"
-        :key="step.id"
-        class="workflow-step"
-        :data-test="`workflow-${step.id}`"
-      >
-        <CheckCircle2 v-if="step.complete" :size="16" aria-hidden="true" />
-        <span v-else class="step-dot" aria-hidden="true"></span>
-        <strong>{{ step.label }}</strong>
-      </div>
-    </section>
-
-    <section class="summary-strip" aria-label="Learning cockpit summary">
-      <article>
-        <span>学习目标摘要</span>
-        <strong>{{ state.knowledgeBase.visibility }}</strong>
-        <p>{{ state.knowledgeBase.name }} / 掌握 RAG 的核心概念与实践应用</p>
-      </article>
-      <article>
-        <span>今日进度</span>
-        <strong>{{ state.sseStage }}</strong>
-        <p>SSE stage: status / token / done events</p>
-      </article>
-      <article>
-        <span>当前主题</span>
-        <strong>{{ state.resourceTaskId }}</strong>
-        <p>RAG 检索流程与向量检索基础</p>
-      </article>
-      <article>
-        <span>重规划记录</span>
-        <strong>{{ state.replanRecordId }}</strong>
-        <p>assessment-triggered path update</p>
-      </article>
-      <article>
-        <span>课程资料 Documents</span>
-        <strong>{{ indexedDocuments }} / {{ pendingDocuments }}</strong>
-        <p>indexed / pending async index tasks</p>
-      </article>
-      <article>
-        <span>平均掌握度</span>
-        <strong>{{ averageMastery }}%</strong>
-        <p>path and assessment aggregate</p>
-      </article>
-    </section>
-
-    <section class="student-cockpit">
-      <div class="student-primary-workspace" data-test="student-primary-workspace">
-        <article class="panel chat-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">RAG 问答区 / RAG Chat</p>
-              <h3>{{ state.ragQuestion }}</h3>
-            </div>
-            <MessageSquareText :size="20" aria-hidden="true" />
-          </div>
-          <label class="field-control">
-            <span>问题输入</span>
-            <input
-              v-model="state.ragQuestion"
-              type="text"
-              data-test="rag-question-input"
-              placeholder="请输入你的问题..."
-            />
-          </label>
-          <p class="answer-text ai-answer">{{ state.ragAnswer }}</p>
-          <div class="stage-line">
-            <Bot :size="16" aria-hidden="true" />
-            <span>流式阶段 SSE stage</span>
-            <strong>{{ state.sseStage }}</strong>
-          </div>
-          <div class="trace-chip">
-            traceId <strong>{{ state.ragTraceId }}</strong>
-          </div>
-          <div class="no-source-card" data-test="no-source-card">
-            <AlertTriangle :size="18" aria-hidden="true" />
-            <div>
-              <strong>无可靠来源，系统暂不回答</strong>
-              <p>未检索到足够可靠的课程来源时，系统拒绝编造答案。你可以换一种问法，或请教师补充课程资料。</p>
-              <span>no source / traceId: trace_xyz789 / 最低相似度阈值 0.70</span>
-            </div>
-          </div>
-        </article>
-
-        <article class="panel citation-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">引用来源列表 / Citations</p>
-              <h3>可解释来源</h3>
-            </div>
-            <LibraryBig :size="20" aria-hidden="true" />
-          </div>
-          <ol class="citation-list">
-            <li v-for="source in state.ragSources" :key="`${source.documentName}-${source.pageNum}`">
-              <strong>{{ source.documentName }}</strong>
-              <span>页码 p.{{ source.pageNum }} / {{ source.sectionTitle }} / score {{ source.score }}</span>
-              <p>{{ source.excerpt }}</p>
-              <small>documentId: doc_001 / chunkId: chunk_001</small>
-            </li>
-          </ol>
-          <div class="api-source-list">
-            <strong>接口数据来源</strong>
-            <span>POST /api/rag/query</span>
-            <span>GET /api/agent/tasks/{taskId}/trace</span>
-          </div>
-        </article>
-
-        <article class="panel path-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">学习路径节点 / Learning Path</p>
-              <h3>可追踪下一步</h3>
-            </div>
-            <Route :size="20" aria-hidden="true" />
-          </div>
-          <div class="path-board">
-            <section v-for="node in pathNodes" :key="node.title" class="path-node">
-              <div>
-                <strong>{{ node.title }}</strong>
-                <em :class="['status-pill', node.status.toLowerCase()]">{{ node.status }}</em>
-              </div>
-              <p>{{ node.reason }}</p>
-              <div class="mini-meter" :aria-label="`${node.title} mastery`">
-                <span :style="{ width: `${node.mastery}%` }"></span>
-              </div>
-            </section>
-          </div>
-        </article>
-      </div>
-
-      <div class="student-support-workspace" data-test="student-support-workspace">
-      <article class="panel profile-panel">
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">当前画像 / Learning Profile</p>
-            <h3>{{ state.learnerProfile.learnerId }}</h3>
-          </div>
-          <UserRound :size="20" aria-hidden="true" />
-        </div>
-        <label class="field-control">
-          <span>画像补充信息</span>
-          <textarea
-            v-model="state.profilePrompt"
-            data-test="profile-prompt-input"
-            rows="4"
-            placeholder="描述学习目标、当前卡点和资源偏好"
-          ></textarea>
-        </label>
-        <div v-if="state.followUpQuestions.length" class="follow-up-list" aria-label="Profile follow-up questions">
-          <button
-            v-for="(question, index) in state.followUpQuestions"
-            :key="question"
-            :class="['follow-up-chip', { selected: state.selectedFollowUpQuestion === question }]"
-            type="button"
-            :aria-pressed="state.selectedFollowUpQuestion === question"
-            :data-test="`profile-follow-up-${index}`"
-            @click="selectFollowUpQuestion(question)"
-          >
-            {{ question }}
-          </button>
-        </div>
-        <button
-          class="tool-button"
-          type="button"
-          data-test="refine-profile"
-          :disabled="isLoading"
-          @click="refineProfile"
-        >
-          <UserRound :size="17" aria-hidden="true" />
-          {{ state.loadingAction === 'profile' ? '更新画像中' : '更新画像' }}
-        </button>
-        <dl class="detail-grid">
-          <div>
-            <dt>专业</dt>
-            <dd>{{ state.learnerProfile.major }}</dd>
-          </div>
-          <div>
-            <dt>学习目标</dt>
-            <dd>{{ state.learnerProfile.goal }}</dd>
-          </div>
-          <div>
-            <dt>薄弱点</dt>
-            <dd>{{ state.learnerProfile.weakness }}</dd>
-          </div>
-          <div>
-            <dt>偏好</dt>
-            <dd>{{ state.learnerProfile.preference }}</dd>
-          </div>
-        </dl>
-      </article>
-
-      <article class="panel kb-panel">
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">知识库 / Knowledge Bases</p>
-            <h3>{{ state.knowledgeBase.name }}</h3>
-          </div>
-          <Database :size="20" aria-hidden="true" />
-        </div>
-        <label class="file-picker">
-          <FileUp :size="17" aria-hidden="true" />
-          <span>{{ selectedDocumentFile?.name ?? '选择课程资料' }}</span>
-          <input
-            type="file"
-            data-test="document-file-input"
-            accept=".md,.markdown,.pdf,.txt"
-            @change="selectDocumentFile"
+    <section class="workbench-ai-section" aria-label="AI 问答与 RAG 工作区">
+      <div :class="['ai-workbench-grid', { 'thought-panel-hidden': isThoughtPanelHidden }]">
+        <div class="ai-stream-shell">
+          <WorkspaceStream
+            v-model:assessment-answer="state.assessmentAnswer"
+            :question="state.ragQuestion"
+            :profile-prompt="state.profilePrompt"
+            :answer="state.ragAnswer"
+            :stage="state.sseStage"
+            :trace-id="state.ragTraceId"
+            :sources="state.ragSources"
+            :verification="state.qaVerification"
+            :quality-flags="state.qaQualityFlags"
+            :source-policy="state.qaSourcePolicy"
+            :uncertainty-level="state.qaUncertaintyLevel"
+            :answer-mode="state.qaAnswerMode"
+            :reasoning-effort="state.qaReasoningEffort"
+            :tool-call-count="state.qaToolCallCount"
+            :path-nodes="pathNodes"
+            :resources="resources"
+            :resource-task-id="state.resourceTaskId"
+            :resource-task-status="state.resourceTaskStatus"
+            :resource-review-status="state.resourceReviewStatus"
+            :resource-progress-percent="state.resourceProgressPercent"
+            :resource-safety-status="state.resourceSafetyStatus"
+            :mastery="state.mastery"
+            :assessment-status="state.assessmentStatus"
+            :replan-record-id="state.replanRecordId"
+            :error-message="localizedErrorMessage"
           />
-        </label>
-        <button class="tool-button" type="button" data-test="upload-document" @click="uploadDocument">
-          <UploadCloud :size="17" aria-hidden="true" />
-          上传课程资料
-        </button>
-        <p v-if="state.errorMessage" class="error-text" role="status">{{ state.errorMessage }}</p>
-        <ul class="document-list" aria-label="Documents">
-          <li v-for="document in documents" :key="document.id">
-            <FileUp :size="16" aria-hidden="true" />
-            <div>
-              <strong>{{ document.name }}</strong>
-              <span>{{ document.type }} / {{ document.indexTaskId }} / {{ document.chunks }} chunks</span>
-            </div>
-            <em :class="['status-pill', document.status.toLowerCase()]">{{ document.status }}</em>
-          </li>
-        </ul>
-      </article>
-
-      <article class="panel resource-panel">
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">生成资源状态 / Generated Resources</p>
-            <h3>审核闸口资源架</h3>
-          </div>
-          <FileText :size="20" aria-hidden="true" />
+          <WorkspaceComposer
+            v-model:question="state.ragQuestion"
+            :selected-file-name="selectedDocumentFileName"
+            :is-loading="isLoading"
+            :loading-action="state.loadingAction"
+            @select-file="selectDocumentFile"
+            @upload="uploadDocument"
+            @generate="generateResources"
+            @assess="submitAssessment"
+            @view-path="viewLearningPath"
+            @send="askRag"
+          />
         </div>
-        <fieldset class="resource-type-picker">
-          <legend>资源类型</legend>
-          <label v-for="type in RESOURCE_TYPES" :key="type" class="resource-type-option">
-            <input
-              v-model="selectedResourceTypes"
-              type="checkbox"
-              :value="type"
-              :data-test="`resource-type-${type}`"
-            />
-            <span>{{ type }}</span>
-          </label>
-        </fieldset>
-        <button
-          class="tool-button"
-          type="button"
-          data-test="generate-resources"
-          :disabled="isLoading"
-          @click="generateResources"
+        <div
+          :class="['thought-stream-shell', { resizing: isResizingThoughtPanel }]"
+          :style="{ '--thought-panel-height': `${thoughtPanelHeight}px` }"
+          data-test="new-chat-thought-stream"
         >
-          <ListChecks :size="17" aria-hidden="true" />
-          {{ state.loadingAction === 'resources' ? 'AI 生成资源中' : 'AI 生成资源' }}
-        </button>
-        <button
-          class="tool-button secondary"
-          type="button"
-          data-test="refresh-resource-status"
-          :disabled="isLoading || state.resourceTaskId === 'res_task_draft'"
-          @click="refreshResourceStatus"
-        >
-          <Search :size="17" aria-hidden="true" />
-          {{ state.loadingAction === 'resource-status' ? '检查审核状态中' : '查看状态' }}
-        </button>
-        <div class="trace-chip">
-          Resource traceId <strong>{{ state.resourceTraceId }}</strong>
+          <RightThoughtPanel
+            :current-task="thoughtCurrentTask"
+            :agent-steps="revealedThoughtSteps"
+            :rag-sources="thoughtRagSources"
+            :metrics="thoughtMetrics"
+            @hidden-change="isThoughtPanelHidden = $event"
+          />
+          <button
+            v-if="!isThoughtPanelHidden"
+            class="thought-panel-resize-handle"
+            type="button"
+            aria-label="上下拖动调整工作流高度"
+            title="上下拖动调整工作流高度"
+            @pointerdown.prevent="startThoughtPanelResize"
+          />
         </div>
-        <dl class="resource-task-summary" data-test="resource-task-summary">
-          <div>
-            <dt>任务状态</dt>
-            <dd>{{ state.resourceTaskStatus }}</dd>
-          </div>
-          <div>
-            <dt>审核状态</dt>
-            <dd>{{ state.resourceReviewStatus }}</dd>
-          </div>
-          <div>
-            <dt>进度</dt>
-            <dd>{{ state.resourceProgressPercent }}%</dd>
-          </div>
-          <div>
-            <dt>安全</dt>
-            <dd>{{ state.resourceSafetyStatus }}</dd>
-          </div>
-        </dl>
-
-        <div class="status-board resource-status-board" aria-label="Resource review status board">
-          <section class="resource-shelf approved" data-test="resource-shelf-approved">
-            <div class="resource-shelf-heading">
-              <strong>已批准 approved</strong>
-              <span>{{ approvedResources.length }}</span>
-            </div>
-            <ul class="resource-list compact">
-              <li v-for="resource in approvedResources" :key="resource.resourceId">
-                <div class="resource-title-row">
-                  <strong>{{ resource.type }}</strong>
-                  <span>{{ resource.title }}</span>
-                  <em :class="['status-pill', resource.status.toLowerCase()]">{{ resource.reviewStatus }}</em>
-                </div>
-                <small>{{ resource.resourceId }} / {{ resource.modality }} / {{ resource.safetyStatus }}</small>
-                <p>{{ resource.citationSummary }}</p>
-                <blockquote>{{ resource.markdownContent }}</blockquote>
-              </li>
-            </ul>
-            <p v-if="approvedResources.length === 0" class="empty-shelf">暂无已批准资源。</p>
-          </section>
-
-          <section class="resource-shelf pending" data-test="resource-shelf-pending">
-            <div class="resource-shelf-heading">
-              <strong>待教师审核 pending review</strong>
-              <span>{{ pendingReviewResources.length }}</span>
-            </div>
-            <ul class="resource-list compact">
-              <li v-for="resource in pendingReviewResources" :key="resource.resourceId">
-                <div class="resource-title-row">
-                  <strong>{{ resource.type }}</strong>
-                  <span>{{ resource.title }}</span>
-                  <em :class="['status-pill', resource.status.toLowerCase()]">{{ resource.reviewStatus }}</em>
-                </div>
-                <small>{{ resource.resourceId }} / {{ resource.modality }} / {{ resource.safetyStatus }}</small>
-                <p>{{ resource.citationSummary }}</p>
-                <blockquote>{{ resource.markdownContent }}</blockquote>
-              </li>
-            </ul>
-            <p v-if="pendingReviewResources.length === 0" class="empty-shelf">暂无待教师审核资源。</p>
-          </section>
-
-          <section class="resource-shelf revision" data-test="resource-shelf-revision">
-            <div class="resource-shelf-heading">
-              <strong>退回修改 returned</strong>
-              <span>{{ revisionResources.length }}</span>
-            </div>
-            <ul class="resource-list compact">
-              <li v-for="resource in revisionResources" :key="resource.resourceId">
-                <div class="resource-title-row">
-                  <strong>{{ resource.type }}</strong>
-                  <span>{{ resource.title }}</span>
-                  <em :class="['status-pill', resource.status.toLowerCase()]">{{ resource.reviewStatus }}</em>
-                </div>
-                <small>{{ resource.resourceId }} / {{ resource.modality }} / {{ resource.safetyStatus }}</small>
-                <p>{{ resource.citationSummary }}</p>
-                <blockquote>{{ resource.markdownContent }}</blockquote>
-              </li>
-            </ul>
-            <p v-if="revisionResources.length === 0" class="empty-shelf">暂无退回修改。</p>
-          </section>
-
-          <section class="resource-shelf other" data-test="resource-shelf-other">
-            <div class="resource-shelf-heading">
-              <strong>其他状态</strong>
-              <span>{{ otherReviewResources.length }}</span>
-            </div>
-            <ul class="resource-list compact">
-              <li v-for="resource in otherReviewResources" :key="resource.resourceId">
-                <div class="resource-title-row">
-                  <strong>{{ resource.type }}</strong>
-                  <span>{{ resource.title }}</span>
-                  <em :class="['status-pill', resource.status.toLowerCase()]">{{ resource.reviewStatus }}</em>
-                </div>
-                <small>{{ resource.resourceId }} / {{ resource.modality }} / {{ resource.safetyStatus }}</small>
-                <p>{{ resource.citationSummary }}</p>
-                <blockquote>{{ resource.markdownContent }}</blockquote>
-              </li>
-            </ul>
-            <p v-if="otherReviewResources.length === 0" class="empty-shelf">暂无其他审核状态。</p>
-          </section>
-        </div>
-      </article>
-
-      <article class="panel assessment-panel">
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">测评反馈 / Assessment</p>
-            <h3>JOIN 诊断测评</h3>
-          </div>
-          <ClipboardCheck :size="20" aria-hidden="true" />
-        </div>
-        <button
-          class="tool-button"
-          type="button"
-          data-test="submit-assessment"
-          :disabled="isLoading"
-          @click="submitAssessment"
-        >
-          {{ state.loadingAction === 'assessment' ? '提交中' : '开始测评' }}
-        </button>
-        <label class="field-control">
-          <span>作答内容</span>
-          <textarea
-            v-model="state.assessmentAnswer"
-            data-test="assessment-answer-input"
-            rows="4"
-            placeholder="提交前请说明你的推理过程"
-          ></textarea>
-        </label>
-        <p class="answer-text">{{ state.assessmentStatus }}</p>
-        <div>
-          <div class="meter-heading">
-            <span>掌握度 Mastery</span>
-            <strong>{{ state.mastery }}%</strong>
-          </div>
-          <div class="mastery-meter" aria-label="Mastery">
-            <span :style="{ width: `${state.mastery}%` }"></span>
-          </div>
-        </div>
-        <div class="trace-chip">
-          重规划 Replan <strong>{{ state.replanRecordId }}</strong>
-        </div>
-      </article>
-
-      <article class="panel profile-dimensions-panel">
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">画像维度 / Profile Dimensions</p>
-            <h3>维度证据</h3>
-          </div>
-          <UserRound :size="20" aria-hidden="true" />
-        </div>
-        <ul class="dimension-list">
-          <li v-for="dimension in state.learnerProfile.dimensions" :key="dimension.name">
-            <strong>{{ dimension.name }}</strong>
-            <span>{{ dimension.value }} / confidence {{ dimension.confidence }}</span>
-            <p>{{ dimension.evidence }}</p>
-          </li>
-        </ul>
-      </article>
-      </div>
-
-      <div class="student-diagnostics" data-test="student-diagnostics">
-        <article class="panel trace-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">Agent Trace</p>
-              <h3>小时间线 Timeline</h3>
-            </div>
-            <GitBranch :size="20" aria-hidden="true" />
-          </div>
-          <ol class="trace-list">
-            <li v-for="step in traceSteps" :key="`${step.actor}-${step.detail}`">
-              <div>
-                <strong>{{ step.actor }}</strong>
-                <em :class="['status-pill', step.status.toLowerCase()]">{{ step.status }}</em>
-              </div>
-              <p>{{ step.detail }}</p>
-              <span>{{ step.latencyMs }} ms</span>
-            </li>
-          </ol>
-        </article>
-        <article class="panel interface-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">接口数据来源</p>
-              <h3>当前页面主要 API</h3>
-            </div>
-            <Database :size="20" aria-hidden="true" />
-          </div>
-          <ul class="api-source-list expanded">
-            <li>GET /api/student/profile</li>
-            <li>GET /api/learning/goals</li>
-            <li>GET /api/learning/path</li>
-            <li>POST /api/rag/query</li>
-            <li>GET /api/rag/citations</li>
-            <li>GET /api/resources/generation-tasks/{taskId}</li>
-            <li>POST /api/assessment/answers</li>
-          </ul>
-        </article>
-        <article class="panel status-showcase" data-test="status-showcase">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">状态展示方式</p>
-              <h3>关键状态示例</h3>
-            </div>
-            <ListChecks :size="20" aria-hidden="true" />
-          </div>
-          <div class="state-token-grid">
-            <span class="state-token loading">loading 骨架屏</span>
-            <span class="state-token failed">failed 重试</span>
-            <span class="state-token empty">empty 空状态</span>
-            <span class="state-token pending">pending review 待教师审核</span>
-            <span class="state-token no-source">no source 拒答</span>
-            <span class="state-token approved">approved 已批准</span>
-          </div>
-        </article>
       </div>
     </section>
-  </section>
+  </main>
 </template>
+
+<style scoped>
+.student-workbench {
+  display: grid;
+  gap: 28px;
+  min-height: 100svh;
+  min-width: 0;
+  padding: 22px;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 16% 0%, rgba(237, 233, 254, 0.58), transparent 28%),
+    linear-gradient(180deg, rgba(248, 250, 252, 0.82), rgba(241, 245, 249, 0.92)),
+    #f6f7fb;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.new-chat-intro {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(100%, 1180px);
+  margin: 0 auto -6px;
+  padding: 4px 128px 0;
+  text-align: center;
+}
+
+.new-chat-intro div {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  max-width: 860px;
+}
+
+.new-chat-eyebrow {
+  position: absolute;
+  bottom: 10px;
+  left: 2px;
+  padding: 7px 10px;
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 760;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: rgba(16, 163, 127, 0.1);
+  border: 1px solid rgba(16, 163, 127, 0.18);
+  border-radius: 999px;
+}
+
+.new-chat-intro h1 {
+  margin: 0;
+  color: #111827;
+  font-size: clamp(28px, 4vw, 44px);
+  font-weight: 780;
+  letter-spacing: -0.045em;
+  line-height: 0.98;
+}
+
+.new-chat-intro p {
+  max-width: 860px;
+  margin: 0;
+  color: #475569;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.workbench-ai-section {
+  min-width: 0;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 28px;
+  box-shadow: 0 24px 68px rgba(15, 23, 42, 0.08);
+}
+
+.ai-workbench-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(310px, 360px);
+  gap: 18px;
+  align-items: start;
+  min-width: 0;
+  padding: 18px;
+  transition: grid-template-columns 180ms ease;
+}
+
+.ai-workbench-grid.thought-panel-hidden {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.ai-workbench-grid.thought-panel-hidden .thought-stream-shell {
+  position: static;
+  max-height: 0;
+}
+
+.ai-workbench-grid.thought-panel-hidden :deep(.workspace-stream),
+.ai-workbench-grid.thought-panel-hidden :deep(.workspace-composer) {
+  width: min(100%, 1180px);
+}
+
+.ai-stream-shell {
+  position: relative;
+  min-width: 0;
+}
+
+.thought-stream-shell {
+  position: sticky;
+  top: 18px;
+  min-width: 0;
+  height: var(--thought-panel-height, calc(100svh - 76px));
+  max-height: none;
+}
+
+.thought-panel-resize-handle {
+  position: absolute;
+  right: 24px;
+  bottom: 8px;
+  left: 24px;
+  z-index: 3;
+  height: 12px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  cursor: ns-resize;
+}
+
+.thought-panel-resize-handle::before {
+  display: block;
+  width: 46px;
+  height: 4px;
+  margin: 4px auto;
+  content: '';
+  background: #cbd5e1;
+  border-radius: 999px;
+  transition: background 160ms ease, width 160ms ease;
+}
+
+.thought-panel-resize-handle:hover::before,
+.thought-stream-shell.resizing .thought-panel-resize-handle::before {
+  width: 58px;
+  background: #8b5cf6;
+}
+
+.workbench-ai-section :deep(.workspace-chat-header) {
+  border-bottom-color: rgba(226, 232, 240, 0.86);
+}
+
+.workbench-ai-section :deep(.workspace-stream) {
+  width: min(100%, 1040px);
+  max-height: none;
+  padding-bottom: 24px;
+  overflow: visible;
+}
+
+.workbench-ai-section :deep(.workspace-composer) {
+  position: static;
+  width: min(100%, 1040px);
+  margin: 0 auto;
+  padding: 0 24px 24px;
+  pointer-events: auto;
+}
+
+.workbench-dashboard-section {
+  min-width: 0;
+}
+
+@media (max-width: 760px) {
+  .student-workbench {
+    gap: 24px;
+    padding: 14px;
+  }
+
+  .new-chat-intro {
+    display: grid;
+    align-items: start;
+    justify-items: start;
+    padding: 0;
+    text-align: left;
+  }
+
+  .new-chat-intro div {
+    justify-items: start;
+  }
+
+  .new-chat-eyebrow {
+    position: static;
+    width: max-content;
+  }
+
+  .workbench-ai-section {
+    border-radius: 22px;
+  }
+
+  .ai-workbench-grid {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 12px;
+  }
+
+  .thought-stream-shell {
+    position: static;
+    height: auto;
+    max-height: none;
+  }
+
+  .thought-panel-resize-handle {
+    display: none;
+  }
+}
+</style>

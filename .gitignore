@@ -14,9 +14,13 @@ frontend/dist/
 frontend/.vite/
 frontend/*.tsbuildinfo
 frontend/target-ui-check/
+frontend/.env.*
+frontend/.playwright-cli/
+frontend/target-ui-redesign-*/
 
 backend/target/
 
 .history/
 .omc/
 .omx/
+.tmp/

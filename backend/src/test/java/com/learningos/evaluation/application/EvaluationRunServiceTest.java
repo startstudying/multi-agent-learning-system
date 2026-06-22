@@ -128,6 +128,44 @@ class EvaluationRunServiceTest {
     }
 
     @Test
+    void allowsQaGateMetricsAndTreatsPrivacyLeakRateAsLowerIsBetter() {
+        String setId = createAiQaSet();
+        recordAsTeacher("teacher", setId, "ai-qa-answer", "qa-runtime-v1",
+                List.of(
+                        metric("schemaPassRate", 0.98),
+                        metric("verificationPassRate", 0.96),
+                        metric("privacyLeakRate", 0.04),
+                        metric("coreClaimCitationCoverage", 0.82),
+                        metric("uncitedContextLeakRate", 0.12)
+                ));
+        recordAsTeacher("teacher", setId, "ai-qa-answer", "qa-runtime-v2",
+                List.of(
+                        metric("schemaPassRate", 0.99),
+                        metric("verificationPassRate", 0.98),
+                        metric("privacyLeakRate", 0.00),
+                        metric("coreClaimCitationCoverage", 0.93),
+                        metric("uncitedContextLeakRate", 0.02)
+                ));
+
+        var report = compareAsTeacher(
+                "teacher",
+                setId,
+                "ai-qa-answer",
+                List.of("qa-runtime-v1", "qa-runtime-v2"),
+                "qa-runtime-v1"
+        );
+
+        assertThat(report.winnerByMetric()).containsEntry("schemaPassRate", "qa-runtime-v2");
+        assertThat(report.winnerByMetric()).containsEntry("verificationPassRate", "qa-runtime-v2");
+        assertThat(report.winnerByMetric()).containsEntry("privacyLeakRate", "qa-runtime-v2");
+        assertThat(report.winnerByMetric()).containsEntry("coreClaimCitationCoverage", "qa-runtime-v2");
+        assertThat(report.winnerByMetric()).containsEntry("uncitedContextLeakRate", "qa-runtime-v2");
+        assertThat(report.rows().get(1).deltas().get("privacyLeakRate")).isEqualTo(-0.04);
+        assertThat(report.rows().get(1).deltas().get("coreClaimCitationCoverage")).isEqualTo(0.11);
+        assertThat(report.rows().get(1).deltas().get("uncitedContextLeakRate")).isEqualTo(-0.10);
+    }
+
+    @Test
     void weightsMetricAveragesByMetricSampleCount() {
         String setId = createRagSet("teacher", null);
         recordAsTeacher("teacher", setId, "rag-answer", "agent-rag-v1",
@@ -299,6 +337,35 @@ class EvaluationRunServiceTest {
                         null,
                         null,
                         List.of("score should match human rubric")
+                ))
+        )).id();
+    }
+
+    private String createAiQaSet() {
+        return evaluationSetService.upsert("teacher", false, true, new EvaluationSetUpsertRequest(
+                "ai-qa-quality-comparison",
+                "v1",
+                "AI QA quality comparison",
+                "QA verifier and eval gate comparison benchmark",
+                "AI_QA_ANSWER",
+                "ACTIVE",
+                null,
+                null,
+                "ai-qa-answer",
+                "qa-runtime-v1",
+                List.of(new EvaluationSampleRequest(
+                        "qa-quality-001",
+                        "How should AI QA cite course material?",
+                        List.of("doc_citation"),
+                        3,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        List.of("SOURCE_REQUIRED", "SCHEMA_VALID", "PRIVACY_SAFE")
                 ))
         )).id();
     }

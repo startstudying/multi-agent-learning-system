@@ -136,7 +136,11 @@ class LearningWorkflowControllerTest {
                 .getContentAsString();
 
         String pathId = objectMapper.readTree(pathBody).path("data").path("pathId").asText();
+        String profileSnapshot = objectMapper.readTree(pathBody).path("data").path("profileSnapshot").asText();
         assertThat(pathId).isNotBlank();
+        assertThat(profileSnapshot)
+                .contains("profileRef")
+                .doesNotContain("learner_1", "teacher_note");
         assertThat(learningPathRepository.findById(pathId)).isPresent();
         assertThat(learningPathNodeRepository.countByPathId(pathId)).isEqualTo(3);
         assertThat(learningEventRepository.countByLearnerId("learner_1")).isEqualTo(2);

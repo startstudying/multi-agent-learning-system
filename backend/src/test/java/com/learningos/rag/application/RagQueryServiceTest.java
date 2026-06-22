@@ -254,6 +254,53 @@ class RagQueryServiceTest {
     }
 
     @Test
+    void durableRagArtifactsDoNotStoreRawQuestionOrFullExcerpt() {
+        String rawQuestion = "Please explain my private exam anxiety and teacher note details.";
+        String fullExcerpt = "Full source excerpt with sensitive tutoring details that must not be stored verbatim.";
+        seedIndexedChunk("kb_sql", "doc_private", fullExcerpt);
+
+        ragQueryService.queryWithTraceIdAndRequestId(
+                "alice",
+                List.of("kb_sql"),
+                rawQuestion,
+                5,
+                "trc_privacy_guard",
+                "req_privacy_guard"
+        );
+
+        var logFields = new org.springframework.beans.DirectFieldAccessor(queryLogRepository.findAll().getFirst());
+        assertThat((String) logFields.getPropertyValue("question"))
+                .contains("questionHash", "questionLength")
+                .doesNotContain(rawQuestion);
+        assertThat((String) logFields.getPropertyValue("responseJson"))
+                .doesNotContain(rawQuestion, fullExcerpt)
+                .contains("RAG_REPLAY_REDACTED");
+        assertThat(sourceCitationRepository.findAll().getFirst().getExcerpt())
+                .contains("excerptHash", "excerptLength")
+                .doesNotContain(fullExcerpt);
+    }
+
+    @Test
+    void noSourceReplaySnapshotDoesNotStoreRawQuestion() {
+        seedPrivateKnowledgeBase("kb_empty", "alice");
+        String rawQuestion = "What does my private teacher note say about exam anxiety?";
+
+        ragQueryService.queryWithTraceIdAndRequestId(
+                "alice",
+                List.of("kb_empty"),
+                rawQuestion,
+                5,
+                "trc_no_source_privacy",
+                "req_no_source_privacy"
+        );
+
+        var logFields = new org.springframework.beans.DirectFieldAccessor(queryLogRepository.findAll().getFirst());
+        assertThat((String) logFields.getPropertyValue("responseJson"))
+                .contains("RAG_REPLAY_REDACTED")
+                .doesNotContain(rawQuestion);
+    }
+
+    @Test
     void roleAwareAdminQueryCanReadForeignPrivateKnowledgeBase() {
         seedPrivateKnowledgeBase("kb_foreign", "bob");
         seedIndexedChunk("kb_foreign", "doc_foreign", "Hidden admin-only material.");
@@ -388,8 +435,10 @@ class RagQueryServiceTest {
         );
 
         assertThat(second.traceId()).isEqualTo(first.traceId());
-        assertThat(second.answer()).isEqualTo(first.answer());
+        assertThat(first.answer()).contains("SQL JOIN duplicates");
+        assertThat(second.answer()).contains("RAG_REPLAY_REDACTED");
         assertThat(second.sources()).hasSize(1);
+        assertThat(second.sources().getFirst().excerpt()).contains("excerptHash", "excerptLength");
         assertThat(queryLogRepository.count()).isEqualTo(1);
         assertThat(sourceCitationRepository.count()).isEqualTo(1);
         assertThat(ragQueryCount("replay", "true")).isEqualTo(beforeReplayCount + 1.0);
@@ -541,6 +590,67 @@ class RagQueryServiceTest {
     }
 
     @Test
+    void expandsGroundedAnswerWithPocContextWithoutAddingCitations() {
+        Instant now = Instant.now();
+        seedIndexedChunk(
+                "kb_sql",
+                "doc_transactions",
+                "Transactions keep commit and rollback context together.",
+                "chunk_transactions",
+                now.minusSeconds(2),
+                "Transactions",
+                0,
+                headingMetadata("Transactions")
+        );
+        seedIndexedChunk(
+                "kb_sql",
+                "doc_transactions",
+                "Isolation explains visibility rules between concurrent transactions.",
+                "chunk_isolation",
+                now.minusSeconds(1),
+                "Isolation",
+                1,
+                headingMetadata("Transactions", "Isolation")
+        );
+        seedIndexedChunk(
+                "kb_sql",
+                "doc_transactions",
+                "Phantom reads appear when range queries observe new rows.",
+                "chunk_phantom",
+                now,
+                "Phantom reads",
+                2,
+                headingMetadata("Transactions", "Isolation", "Phantom reads")
+        );
+
+        var response = ragQueryService.query(
+                "alice",
+                List.of("kb_sql"),
+                "Explain phantom reads",
+                1
+        );
+
+        assertThat(response.sources()).hasSize(1);
+        assertThat(response.sources().getFirst().documentId()).isEqualTo("doc_transactions");
+        assertThat(response.sources().getFirst().sectionTitle()).isEqualTo("Phantom reads");
+        assertThat(response.answer())
+                .contains("Isolation explains visibility rules")
+                .contains("Phantom reads appear");
+        assertThat(sourceCitationRepository.count()).isEqualTo(1);
+        var logFields = new org.springframework.beans.DirectFieldAccessor(queryLogRepository.findAll().getFirst());
+        assertThat((String) logFields.getPropertyValue("sourcesJson"))
+                .contains("\"pocContext\"")
+                .contains("\"sourceChunkCount\":1")
+                .contains("\"contextChunkCount\":3")
+                .contains("\"expandedChunkCount\":2")
+                .doesNotContain(
+                        "Transactions keep commit",
+                        "Isolation explains visibility",
+                        "Phantom reads appear"
+                );
+    }
+
+    @Test
     void refusesQueryWhenRequestedKnowledgeBaseIsNotAllowed() {
         seedPrivateKnowledgeBase("kb_hidden", "bob");
         double beforeFailureCount = ragFailureCount("FORBIDDEN");
@@ -625,24 +735,39 @@ class RagQueryServiceTest {
             Instant createdAt,
             String sectionTitle
     ) {
+        seedIndexedChunk(kbId, documentId, content, chunkId, createdAt, sectionTitle, 0, "{}");
+    }
+
+    private void seedIndexedChunk(
+            String kbId,
+            String documentId,
+            String content,
+            String chunkId,
+            Instant createdAt,
+            String sectionTitle,
+            int chunkIndex,
+            String metadataJson
+    ) {
         KnowledgeBase kb = seedPrivateKnowledgeBaseIfAbsent(kbId, "alice");
-        KbDocument document = new KbDocument();
-        document.setId(documentId);
-        document.setKnowledgeBase(kb);
-        document.setKbId(kbId);
-        document.setCourseId(kb.getCourseId());
-        document.setName("database-course.md");
-        document.setContentType("text/markdown");
-        document.setSizeBytes((long) content.length());
-        document.setStorageBucket("test");
-        document.setStorageKey("test/" + documentId);
-        document.setVersion(1);
-        document.setParseStatus(DocumentStatus.INDEXED);
-        document.setIndexStatus(DocumentStatus.INDEXED);
-        document.setCreatedBy("alice");
-        document.setCreatedAt(Instant.now());
-        document.setUpdatedAt(Instant.now());
-        documentRepository.save(document);
+        KbDocument document = documentRepository.findById(documentId).orElseGet(() -> {
+            KbDocument created = new KbDocument();
+            created.setId(documentId);
+            created.setKnowledgeBase(kb);
+            created.setKbId(kbId);
+            created.setCourseId(kb.getCourseId());
+            created.setName("database-course.md");
+            created.setContentType("text/markdown");
+            created.setSizeBytes((long) content.length());
+            created.setStorageBucket("test");
+            created.setStorageKey("test/" + documentId);
+            created.setVersion(1);
+            created.setParseStatus(DocumentStatus.INDEXED);
+            created.setIndexStatus(DocumentStatus.INDEXED);
+            created.setCreatedBy("alice");
+            created.setCreatedAt(Instant.now());
+            created.setUpdatedAt(Instant.now());
+            return documentRepository.save(created);
+        });
 
         KbDocChunk chunk = new KbDocChunk();
         chunk.setId(chunkId);
@@ -650,13 +775,17 @@ class RagQueryServiceTest {
         chunk.setDocument(document);
         chunk.setDocumentId(documentId);
         chunk.setDocumentVersion(1);
-        chunk.setChunkIndex(0);
+        chunk.setChunkIndex(chunkIndex);
         chunk.setContent(content);
         chunk.setPageNum(12);
         chunk.setSectionTitle(sectionTitle);
-        chunk.setMetadataJson("{}");
+        chunk.setMetadataJson(metadataJson);
         chunk.setCreatedAt(createdAt);
         chunkRepository.save(chunk);
+    }
+
+    private String headingMetadata(String... headings) {
+        return "{\"headingPath\":[\"" + String.join("\",\"", headings) + "\"]}";
     }
 
     private KnowledgeBase seedPrivateKnowledgeBaseIfAbsent(String id, String owner) {

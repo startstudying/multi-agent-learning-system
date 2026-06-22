@@ -1,4 +1,4 @@
-import { apiRequest, adminApiRequest } from './client'
+import { adminApiRequest } from './client'
 import type { AnalyticsOverview, OpsAlertRecord, OpsAlertSummary } from '../types/api'
 
 export function fetchAnalyticsOverview(): Promise<AnalyticsOverview> {

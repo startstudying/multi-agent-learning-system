@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.learningos.common.api.ErrorCode;
 import com.learningos.common.exception.ApiException;
 import com.learningos.common.observability.LearningOsMetrics;
+import com.learningos.common.privacy.MemoryPrivacyPolicy;
 import com.learningos.common.trace.TraceContext;
 import com.learningos.rag.api.dto.RagQueryDtos.RagQueryResponse;
 import com.learningos.rag.api.dto.RagQueryDtos.RetrievalMetadata;
@@ -38,32 +39,38 @@ public class RagQueryService {
     private final ChunkService chunkService;
     private final RerankerService rerankerService;
     private final AdaptiveRagRouter adaptiveRagRouter;
+    private final PocContextBuilder pocContextBuilder;
     private final ContentSafetyService contentSafetyService;
     private final KbQueryLogRepository queryLogRepository;
     private final SourceCitationRepository sourceCitationRepository;
     private final ObjectMapper objectMapper;
     private final LearningOsMetrics metrics;
+    private final MemoryPrivacyPolicy memoryPrivacyPolicy;
 
     public RagQueryService(
             PermissionService permissionService,
             ChunkService chunkService,
             RerankerService rerankerService,
             AdaptiveRagRouter adaptiveRagRouter,
+            PocContextBuilder pocContextBuilder,
             ContentSafetyService contentSafetyService,
             KbQueryLogRepository queryLogRepository,
             SourceCitationRepository sourceCitationRepository,
             ObjectMapper objectMapper,
-            LearningOsMetrics metrics
+            LearningOsMetrics metrics,
+            MemoryPrivacyPolicy memoryPrivacyPolicy
     ) {
         this.permissionService = permissionService;
         this.chunkService = chunkService;
         this.rerankerService = rerankerService;
         this.adaptiveRagRouter = adaptiveRagRouter;
+        this.pocContextBuilder = pocContextBuilder;
         this.contentSafetyService = contentSafetyService;
         this.queryLogRepository = queryLogRepository;
         this.sourceCitationRepository = sourceCitationRepository;
         this.objectMapper = objectMapper;
         this.metrics = metrics;
+        this.memoryPrivacyPolicy = memoryPrivacyPolicy == null ? new MemoryPrivacyPolicy() : memoryPrivacyPolicy;
     }
 
     @Transactional
@@ -311,6 +318,7 @@ public class RagQueryService {
         RetrievalResult retrievalResult = chunkService.retrieveAllowedChunks(allowedKbIds, question, limit);
         RerankResult rerankResult = rerankerService.rerankOrFallback(question, retrievalResult.chunks(), limit);
         List<KbDocChunk> chunks = rerankResult.chunks();
+        PocContextResult pocContext = pocContextBuilder.build(allowedKbIds, chunks);
         List<SourceCitation> sources = chunks.stream()
                 .map(this::toCitation)
                 .toList();
@@ -324,7 +332,7 @@ public class RagQueryService {
         );
         String answer = retrieval.noSource()
                 ? "No cited course material was found for the question: " + question
-                : buildGroundedAnswer(chunks, question);
+                : buildGroundedAnswer(pocContext.contextChunks(), question);
         RagQueryResponse response = new RagQueryResponse(answer, sources, traceId, retrieval);
         persistQueryLog(
                 userId,
@@ -335,6 +343,7 @@ public class RagQueryService {
                 retrieval,
                 retrievalResult,
                 rerankResult,
+                pocContext,
                 traceId,
                 startedAt,
                 requestId,
@@ -368,6 +377,7 @@ public class RagQueryService {
             RetrievalMetadata retrieval,
             RetrievalResult retrievalResult,
             RerankResult rerankResult,
+            PocContextResult pocContext,
             String traceId,
             long startedAt,
             String requestId,
@@ -379,13 +389,13 @@ public class RagQueryService {
         fields.setPropertyValue("traceId", traceId);
         fields.setPropertyValue("userId", userId);
         fields.setPropertyValue("kbIdsJson", toJson(allowedKbIds, 4000));
-        fields.setPropertyValue("question", truncate(question, 4000));
+        fields.setPropertyValue("question", memoryPrivacyPolicy.questionLogValue(question));
         fields.setPropertyValue("requestId", requestId);
         fields.setPropertyValue("requestHash", requestHash);
-        fields.setPropertyValue("responseJson", requestId == null ? null : toJson(response));
+        fields.setPropertyValue("responseJson", requestId == null ? null : toJson(replaySnapshot(response)));
         fields.setPropertyValue("retrievalCount", retrievalCount);
         fields.setPropertyValue("rerankerStatus", rerankResult.status().name());
-        fields.setPropertyValue("sourcesJson", toJson(queryLogSources(retrieval, retrievalResult, rerankResult, sources), 8000));
+        fields.setPropertyValue("sourcesJson", toJson(queryLogSources(retrieval, retrievalResult, rerankResult, pocContext, sources), 8000));
         fields.setPropertyValue("latencyMs", TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt));
         queryLogRepository.saveAndFlush(log);
     }
@@ -394,6 +404,7 @@ public class RagQueryService {
             RetrievalMetadata retrieval,
             RetrievalResult retrievalResult,
             RerankResult rerankResult,
+            PocContextResult pocContext,
             List<SourceCitation> sources
     ) {
         return Map.of(
@@ -413,6 +424,7 @@ public class RagQueryService {
                         "latencyMs", rerankResult.latencyMs() == null ? 0L : rerankResult.latencyMs(),
                         "errorCode", rerankResult.errorCode() == null ? "" : rerankResult.errorCode()
                 ),
+                "pocContext", pocContext == null ? PocContextResult.empty().toMetadata() : pocContext.toMetadata(),
                 "sources", sources.stream()
                         .map(source -> Map.of(
                                 "documentId", source.documentId(),
@@ -438,9 +450,34 @@ public class RagQueryService {
         record.setDocumentName(source.documentName());
         record.setPageNum(source.pageNum());
         record.setSectionTitle(source.sectionTitle());
-        record.setExcerpt(source.excerpt());
+        record.setExcerpt(memoryPrivacyPolicy.citationExcerptValue(source.excerpt(), citationRef(source)));
         record.setScore(source.score());
         return record;
+    }
+
+    private RagQueryResponse replaySnapshot(RagQueryResponse response) {
+        List<SourceCitation> redactedSources = response.sources().stream()
+                .map(source -> new SourceCitation(
+                        source.documentId(),
+                        source.documentName(),
+                        source.pageNum(),
+                        source.sectionTitle(),
+                        memoryPrivacyPolicy.citationExcerptValue(source.excerpt(), citationRef(source)),
+                        source.score()
+                ))
+                .toList();
+        return new RagQueryResponse(
+                memoryPrivacyPolicy.replayRedactedAnswer(),
+                redactedSources,
+                response.traceId(),
+                response.retrieval()
+        );
+    }
+
+    private String citationRef(SourceCitation source) {
+        String documentId = source.documentId() == null ? "document:none" : source.documentId();
+        String page = source.pageNum() == null ? "page:none" : "page:" + source.pageNum();
+        return documentId + "#" + page;
     }
 
     private String toJson(Object value, int maxLength) {
@@ -467,8 +504,12 @@ public class RagQueryService {
     }
 
     private String buildGroundedAnswer(List<KbDocChunk> chunks, String question) {
-        String first = chunks.getFirst().getContent();
-        return first.length() > 400 ? first.substring(0, 400) : first;
+        String answer = chunks.stream()
+                .filter(chunk -> chunk.getContent() != null && !chunk.getContent().isBlank())
+                .limit(4)
+                .map(chunk -> excerpt(chunk.getContent(), 400))
+                .collect(java.util.stream.Collectors.joining("\n\n"));
+        return answer.length() > 1200 ? answer.substring(0, 1200) : answer;
     }
 
     private SourceCitation toCitation(KbDocChunk chunk) {
@@ -607,10 +648,15 @@ public class RagQueryService {
     }
 
     private String excerpt(String content) {
+        return excerpt(content, 180);
+    }
+
+    private String excerpt(String content, int maxLength) {
         if (content == null) {
             return "";
         }
-        return content.length() > 180 ? content.substring(0, 180) : content;
+        int safeMaxLength = Math.max(1, maxLength);
+        return content.length() > safeMaxLength ? content.substring(0, safeMaxLength) : content;
     }
 
     private record ReplayContext(

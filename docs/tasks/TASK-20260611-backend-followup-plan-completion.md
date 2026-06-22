@@ -69,5 +69,5 @@ mvn test
 - [x] Qdrant external smoke 不是占位测试，默认跳过，opt-in 时真实检查 collection/dimension。
 - [x] Model Provider external smoke 不是占位测试，默认跳过，opt-in 时真实调用 OpenAI-compatible chat endpoint。
 - [x] 聚焦测试通过。
-- [ ] 全量 backend 测试通过。
+- [x] 全量 backend 测试通过。
 - [x] 计划、证据、验收、memory、changelog 更新。

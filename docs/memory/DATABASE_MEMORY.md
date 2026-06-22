@@ -1,5 +1,13 @@
 # DATABASE_MEMORY.md
 
+## 2026-06-21 Memory Lifecycle Governance
+
+- Added `V23__memory_lifecycle_governance.sql`.
+- `kb_chat_session` now has `learner_id`, `course_id`, `title`, `status`, `salience_score`, `decay_at`, `created_at`, `updated_at`, and `deleted_at`.
+- `kb_chat_message` now has `session_id`, `learner_id`, `role`, `content_summary`, `source_policy`, `salience_score`, `decay_at`, `editable`, `created_at`, `updated_at`, and `deleted_at`.
+- Added `idx_kb_chat_message_lifecycle (learner_id, deleted_at, decay_at, created_at)`.
+- `MysqlMigrationSmokeTest` expected latest version/count is now V23/23, but the real MySQL smoke remains opt-in and was not executed for this slice.
+
 ## Database
 
 - MySQL 8.x
@@ -46,6 +54,7 @@ No new migration was added. The current table columns are `id`, `code`, `version
 
 | Date | Migration | Related SPEC |
 |---|---|---|
+| 2026-06-21 | `V23__memory_lifecycle_governance.sql` extends `kb_chat_session` and `kb_chat_message` for owner-scoped session memory lifecycle, salience/decay, editable message summaries, and soft delete. Static convergence and backend tests passed; real MySQL smoke remains opt-in. | `docs/specs/SPEC-20260621-memory-lifecycle-governance-mvp.md` |
 | 2026-06-08 | `V19__course_enrollment_scope.sql` adds `course_enrollment` with `(course_id, learner_id)` uniqueness, `status`, active lookup indexes by learner/status and course/status. This is the authorization source for P3-4-D course enrollment scope. Static migration and full backend Maven verification passed; real MySQL smoke remains environment-dependent. | `docs/specs/SPEC-20260608-course-enrollment-scope.md` |
 | 2026-06-06 | `V1__rag_foundation.sql` stores `kb_query_log.kb_ids_json`, `question`, and `sources_json` as `text` to avoid MySQL 8 `ERROR 1118 Row size too large` under `utf8mb4`; entity mapping uses `columnDefinition = "text"`. | `docs/specs/SPEC-20260606-mysql-migration-smoke.md` |
 | 2026-06-06 | `V6__resource_review_governance.sql` adds `reason`, `citation_check`, `safety_check`, and `revision_suggestion` to `resource_review`. | `docs/specs/SPEC-20260606-review-gate-state-model.md` |

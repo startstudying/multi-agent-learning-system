@@ -13,7 +13,7 @@ cd frontend && pnpm test
 
 ## 后端结果
 
-- `mvn test`：**通过**（exit 0）
+- `mvn test`：**通过**（627 run, 0 failures, 0 errors, 3 skipped）
 - 新增/更新测试：`TokenBudgetGateServiceTest`、`BusinessPermissionMatrixRegressionTest`、`ModelProviderExternalSmokeTest`、`QdrantVectorExternalSmokeTest`、`MysqlMigrationSmokeTest` V22 对齐、V22 migration test、Health/Analytics 相关回归
 
 ## 前端结果

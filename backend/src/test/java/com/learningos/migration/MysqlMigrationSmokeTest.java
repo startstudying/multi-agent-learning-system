@@ -21,8 +21,8 @@ class MysqlMigrationSmokeTest {
 
     private static final String DEFAULT_URL = "jdbc:mysql://127.0.0.1:3306/learning_os_migration_smoke"
             + "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC";
-    private static final String LATEST_MIGRATION_VERSION = "22";
-    private static final int LATEST_MIGRATION_COUNT = 22;
+    private static final String LATEST_MIGRATION_VERSION = "23";
+    private static final int LATEST_MIGRATION_COUNT = 23;
 
     @Test
     void migratesEmptyMysqlSchemaThroughLatestVersionAndVerifiesMysqlDialectObjects() {
@@ -100,8 +100,8 @@ class MysqlMigrationSmokeTest {
             assertThat(queryLong(connection, """
                     select count(*)
                     from flyway_schema_history
-                    where success = 1 and version in ('6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22')
-                    """)).isEqualTo(17L);
+                    where success = 1 and version in ('6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23')
+                    """)).isEqualTo(18L);
 
             verifyCurrentMigrationObjects(connection);
         }
@@ -226,6 +226,16 @@ class MysqlMigrationSmokeTest {
         assertThat(columnExists(connection, "ops_alert_record", "notification_status")).isTrue();
         assertThat(indexExists(connection, "ops_alert_record", "uk_ops_alert_window")).isTrue();
         assertThat(indexExists(connection, "ops_alert_record", "idx_ops_alert_status")).isTrue();
+
+        assertThat(columnExists(connection, "kb_chat_session", "learner_id")).isTrue();
+        assertThat(columnExists(connection, "kb_chat_session", "salience_score")).isTrue();
+        assertThat(columnExists(connection, "kb_chat_session", "decay_at")).isTrue();
+        assertThat(columnExists(connection, "kb_chat_session", "deleted_at")).isTrue();
+        assertThat(columnExists(connection, "kb_chat_message", "session_id")).isTrue();
+        assertThat(columnExists(connection, "kb_chat_message", "learner_id")).isTrue();
+        assertThat(columnExists(connection, "kb_chat_message", "content_summary")).isTrue();
+        assertThat(columnExists(connection, "kb_chat_message", "editable")).isTrue();
+        assertThat(indexExists(connection, "kb_chat_message", "idx_kb_chat_message_lifecycle")).isTrue();
 
         assertThat(routineExists(connection, "add_column_if_missing")).isFalse();
         assertThat(routineExists(connection, "add_index_if_missing")).isFalse();

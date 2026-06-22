@@ -7,16 +7,13 @@ alwaysApply: true
 
 # Skill Selection Gate
 
-Before writing PRD, REQ, SPEC, PLAN, TASK, or code, perform Skill Selection.
+Before writing PRD, REQ, SPEC, PLAN, TASK, or code, perform Skill Selection at the depth justified by size.
 
-For every request, output:
+Output:
 
-1. Task type
-2. Selected skills (from `docs/skills/SKILL_REGISTRY.md`)
-3. Why each skill is selected
-4. Missing skills, if any
-5. Whether GitHub research is needed
-6. New project-specific skill to create, if needed
+1. XS: one concise sentence naming task type, selected skill(s), and GitHub research decision.
+2. S: short report with task type, selected skills, missing skills, and GitHub research decision.
+3. M/L: full report with task type, selected skills, why each skill is selected, missing skills, GitHub research decision, and whether a new project-specific skill is needed.
 
 Read only the selected skill documents. Do not load all skills at once.
 

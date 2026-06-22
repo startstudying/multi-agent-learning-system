@@ -152,6 +152,90 @@ class RagEvaluationServiceTest {
                 .contains("SQL Course RAG Benchmark", "Recall@K", "No-source Refusal Rate");
     }
 
+    @Test
+    void comparesBaselineTopKWithPocContextCandidateOutputs() throws Exception {
+        RagEvaluationRequest request = objectMapper.readValue("""
+                {
+                  "comparison": {
+                    "comparisonId": "fusion-rag-poc-v1",
+                    "baselineId": "baseline-topk",
+                    "candidateId": "poc-context",
+                    "topK": 2,
+                    "samples": [
+                      {
+                        "sampleKey": "rag-poc-001",
+                        "question": "Why do phantom reads happen?",
+                        "expectedChunkIds": ["chunk_isolation", "chunk_phantom"],
+                        "expectedNoSource": false,
+                        "baseline": {
+                          "answer": "Isolation controls concurrent visibility.",
+                          "citations": [
+                            {
+                              "documentId": "chunk_isolation",
+                              "documentName": "tx.md",
+                              "pageNum": 1,
+                              "sectionTitle": "Isolation",
+                              "excerpt": "Isolation controls concurrent visibility.",
+                              "score": 0.91
+                            }
+                          ]
+                        },
+                        "candidate": {
+                          "answer": "Isolation controls concurrent visibility. Phantom reads happen when range queries observe new rows.",
+                          "citations": [
+                            {
+                              "documentId": "chunk_isolation",
+                              "documentName": "tx.md",
+                              "pageNum": 1,
+                              "sectionTitle": "Isolation",
+                              "excerpt": "Isolation controls concurrent visibility.",
+                              "score": 0.91
+                            },
+                            {
+                              "documentId": "chunk_phantom",
+                              "documentName": "tx.md",
+                              "pageNum": 2,
+                              "sectionTitle": "Phantom reads",
+                              "excerpt": "Phantom reads happen when range queries observe new rows.",
+                              "score": 0.88
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "sampleKey": "rag-poc-002",
+                        "question": "What does the course say about imaginary locks?",
+                        "expectedChunkIds": [],
+                        "expectedNoSource": true,
+                        "baseline": {
+                          "answer": "NO_SOURCE: No cited course material was found.",
+                          "citations": []
+                        },
+                        "candidate": {
+                          "answer": "NO_SOURCE: No cited course material was found.",
+                          "citations": []
+                        }
+                      }
+                    ]
+                  }
+                }
+                """, RagEvaluationRequest.class);
+
+        RagEvaluationResult result = service.evaluate(request);
+
+        assertThat(result.comparisonResult()).isNotNull();
+        assertThat(result.comparisonResult().comparisonId()).isEqualTo("fusion-rag-poc-v1");
+        assertThat(result.comparisonResult().baselineMetrics().recallAtK()).isEqualTo(0.5);
+        assertThat(result.comparisonResult().candidateMetrics().recallAtK()).isEqualTo(1.0);
+        assertThat(result.comparisonResult().candidateMetrics().coreClaimCitationCoverage()).isEqualTo(1.0);
+        assertThat(result.comparisonResult().candidateMetrics().uncitedContextLeakRate()).isEqualTo(0.0);
+        assertThat(result.comparisonResult().deltas()).containsEntry("recallAtK", 0.5);
+        assertThat(result.comparisonResult().winnerByMetric()).containsEntry("recallAtK", "poc-context");
+        assertThat(result.recallAtK()).isEqualTo(1.0);
+        assertThat(result.coreClaimCitationCoverage()).isEqualTo(1.0);
+        assertThat(result.report()).contains("Fusion RAG POC Comparison", "baseline-topk", "poc-context");
+    }
+
     private SourceCitation citation(String documentId) {
         return new SourceCitation(documentId, documentId + ".md", 1, "section", "excerpt", 1.0);
     }

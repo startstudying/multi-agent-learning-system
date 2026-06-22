@@ -8,7 +8,8 @@ public record RagEvaluationRequest(
         List<String> expectedSourceIds,
         List<SourceCitation> actualCitations,
         Integer topK,
-        Benchmark benchmark
+        Benchmark benchmark,
+        Comparison comparison
 ) {
     public RagEvaluationRequest {
         expectedSourceIds = expectedSourceIds == null ? List.of() : List.copyOf(expectedSourceIds);
@@ -20,7 +21,16 @@ public record RagEvaluationRequest(
             List<SourceCitation> actualCitations,
             Integer topK
     ) {
-        this(expectedSourceIds, actualCitations, topK, null);
+        this(expectedSourceIds, actualCitations, topK, null, null);
+    }
+
+    public RagEvaluationRequest(
+            List<String> expectedSourceIds,
+            List<SourceCitation> actualCitations,
+            Integer topK,
+            Benchmark benchmark
+    ) {
+        this(expectedSourceIds, actualCitations, topK, benchmark, null);
     }
 
     public record Benchmark(
@@ -50,6 +60,41 @@ public record RagEvaluationRequest(
         public BenchmarkSample {
             expectedChunkIds = expectedChunkIds == null ? List.of() : List.copyOf(expectedChunkIds);
             actualCitations = actualCitations == null ? List.of() : List.copyOf(actualCitations);
+        }
+    }
+
+    public record Comparison(
+            String comparisonId,
+            String baselineId,
+            String candidateId,
+            Integer topK,
+            List<ComparisonSample> samples
+    ) {
+        public Comparison {
+            samples = samples == null ? List.of() : List.copyOf(samples);
+        }
+    }
+
+    public record ComparisonSample(
+            String sampleKey,
+            String question,
+            List<String> expectedChunkIds,
+            Boolean expectedNoSource,
+            ComparisonOutput baseline,
+            ComparisonOutput candidate,
+            Integer topK
+    ) {
+        public ComparisonSample {
+            expectedChunkIds = expectedChunkIds == null ? List.of() : List.copyOf(expectedChunkIds);
+        }
+    }
+
+    public record ComparisonOutput(
+            String answer,
+            List<SourceCitation> citations
+    ) {
+        public ComparisonOutput {
+            citations = citations == null ? List.of() : List.copyOf(citations);
         }
     }
 }

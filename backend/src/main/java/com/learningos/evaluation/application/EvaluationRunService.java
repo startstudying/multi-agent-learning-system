@@ -46,9 +46,14 @@ public class EvaluationRunService {
             "wrongCauseAgreementRate",
             "qualityScore",
             "citationCoverage",
-            "reviewPassRate"
+            "reviewPassRate",
+            "schemaPassRate",
+            "verificationPassRate",
+            "privacyLeakRate",
+            "coreClaimCitationCoverage",
+            "uncitedContextLeakRate"
     );
-    private static final Set<String> LOWER_IS_BETTER_METRICS = Set.of("meanAbsoluteError");
+    private static final Set<String> LOWER_IS_BETTER_METRICS = Set.of("meanAbsoluteError", "privacyLeakRate", "uncitedContextLeakRate");
 
     private final EvaluationSetRepository evaluationSetRepository;
     private final EvaluationRunRepository evaluationRunRepository;

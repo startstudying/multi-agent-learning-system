@@ -165,4 +165,72 @@ class RagEvaluationControllerTest {
                 .andExpect(jsonPath("$.data.report").value(containsString("Recall@K")))
                 .andExpect(jsonPath("$.data.report").value(containsString("No-source Refusal Rate")));
     }
+
+    @Test
+    void exposesBaselineVsPocContextComparison() throws Exception {
+        mockMvc.perform(post("/api/rag/evaluations")
+                        .header("X-User-Id", "teacher")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "comparison": {
+                                    "comparisonId": "fusion-rag-poc-v1",
+                                    "baselineId": "baseline-topk",
+                                    "candidateId": "poc-context",
+                                    "topK": 2,
+                                    "samples": [
+                                      {
+                                        "sampleKey": "rag-poc-001",
+                                        "question": "Why do phantom reads happen?",
+                                        "expectedChunkIds": ["chunk_isolation", "chunk_phantom"],
+                                        "expectedNoSource": false,
+                                        "baseline": {
+                                          "answer": "Isolation controls concurrent visibility.",
+                                          "citations": [
+                                            {
+                                              "documentId": "chunk_isolation",
+                                              "documentName": "tx.md",
+                                              "pageNum": 1,
+                                              "sectionTitle": "Isolation",
+                                              "excerpt": "Isolation controls concurrent visibility.",
+                                              "score": 0.91
+                                            }
+                                          ]
+                                        },
+                                        "candidate": {
+                                          "answer": "Isolation controls concurrent visibility. Phantom reads happen when range queries observe new rows.",
+                                          "citations": [
+                                            {
+                                              "documentId": "chunk_isolation",
+                                              "documentName": "tx.md",
+                                              "pageNum": 1,
+                                              "sectionTitle": "Isolation",
+                                              "excerpt": "Isolation controls concurrent visibility.",
+                                              "score": 0.91
+                                            },
+                                            {
+                                              "documentId": "chunk_phantom",
+                                              "documentName": "tx.md",
+                                              "pageNum": 2,
+                                              "sectionTitle": "Phantom reads",
+                                              "excerpt": "Phantom reads happen when range queries observe new rows.",
+                                              "score": 0.88
+                                            }
+                                          ]
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("OK"))
+                .andExpect(jsonPath("$.data.comparisonResult.comparisonId").value("fusion-rag-poc-v1"))
+                .andExpect(jsonPath("$.data.comparisonResult.baselineMetrics.recallAtK").value(0.5))
+                .andExpect(jsonPath("$.data.comparisonResult.candidateMetrics.recallAtK").value(1.0))
+                .andExpect(jsonPath("$.data.comparisonResult.candidateMetrics.coreClaimCitationCoverage").value(1.0))
+                .andExpect(jsonPath("$.data.comparisonResult.winnerByMetric.recallAtK").value("poc-context"))
+                .andExpect(jsonPath("$.data.coreClaimCitationCoverage").value(1.0))
+                .andExpect(jsonPath("$.data.report").value(containsString("Fusion RAG POC Comparison")));
+    }
 }

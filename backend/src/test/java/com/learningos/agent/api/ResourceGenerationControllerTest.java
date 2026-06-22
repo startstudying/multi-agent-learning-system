@@ -230,9 +230,26 @@ class ResourceGenerationControllerTest {
                 .getContentAsString();
 
         String taskId = objectMapper.readTree(responseBody).path("data").path("taskId").asText();
+        String profileSnapshot = objectMapper.readTree(responseBody).path("data").path("profileSnapshot").asText();
+        assertThat(profileSnapshot)
+                .contains("profileRef")
+                .doesNotContain("profiled_alice", "teacher_note", "Assign repository exercises before transactions");
         assertThat(resourceGenerationTaskRepository.findById(taskId))
                 .hasValueSatisfying(task -> assertThat(task.getProfileSnapshot())
-                        .contains("Java basics with weak SQL joins", "code labs", "Confuses JOIN cardinality"));
+                        .contains("Java basics with weak SQL joins", "code labs", "Confuses JOIN cardinality")
+                        .doesNotContain("teacher_note", "Assign repository exercises before transactions"));
+        org.mockito.Mockito.verify(aiModelGateway).generateStructuredWithRetry(
+                org.mockito.ArgumentMatchers.argThat(request -> {
+                    Object snapshot = request.context().get("profileSnapshot");
+                    return snapshot != null
+                            && snapshot.toString().contains("profileRef")
+                            && !snapshot.toString().contains("teacher_note")
+                            && !snapshot.toString().contains("Assign repository exercises before transactions");
+                }),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any()
+        );
     }
 
     @Test

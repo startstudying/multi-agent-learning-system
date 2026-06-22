@@ -161,6 +161,44 @@ class EvaluationSetServiceTest {
     }
 
     @Test
+    void createsAiQaAnswerSetWithQualityGateCriteria() {
+        var response = evaluationSetService.upsert("teacher", false, true, new EvaluationSetUpsertRequest(
+                "ai-qa-answer-gate",
+                "v1",
+                "AI QA answer gate",
+                "Citation, no-source, privacy and schema benchmark",
+                "AI_QA_ANSWER",
+                "ACTIVE",
+                null,
+                "kb_sql",
+                "ai-qa-answer",
+                "qa-runtime-v1",
+                List.of(new EvaluationSampleRequest(
+                        "qa-source-001",
+                        "Why does SQL JOIN duplicate rows?",
+                        List.of("doc_sql_join"),
+                        3,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        List.of("SOURCE_REQUIRED", "SCHEMA_VALID", "PRIVACY_SAFE")
+                ))
+        ));
+
+        assertThat(response.type()).isEqualTo("AI_QA_ANSWER");
+        assertThat(response.promptCode()).isEqualTo("ai-qa-answer");
+        assertThat(response.samples()).singleElement().satisfies(sample -> {
+            assertThat(sample.question()).contains("JOIN");
+            assertThat(sample.expectedSourceIds()).containsExactly("doc_sql_join");
+            assertThat(sample.qualityCriteria()).contains("SOURCE_REQUIRED", "SCHEMA_VALID", "PRIVACY_SAFE");
+        });
+    }
+
+    @Test
     void duplicateCodeAndVersionUpdatesExistingEvaluationSetWithoutCreatingDuplicateRows() {
         var first = evaluationSetService.upsert("teacher", false, true, minimalRagSet("Original name"));
         var updated = evaluationSetService.upsert("teacher", false, true, minimalRagSet("Updated name"));

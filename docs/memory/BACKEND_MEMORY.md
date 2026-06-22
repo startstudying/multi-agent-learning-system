@@ -1,5 +1,81 @@
 # BACKEND_MEMORY.md
 
+## 2026-06-21 Memory lifecycle governance MVP
+
+- Implemented backend P2 MVP for memory lifecycle governance.
+- Added V23 `kb_chat_session` / `kb_chat_message` lifecycle columns and `idx_kb_chat_message_lifecycle`.
+- Extended chat entities and repositories, including `KbChatMessageRepository`.
+- Added `MemoryLifecycleService` for low-sensitive QA memory writes, salience/decay calculation, list mapping, owner-only edit, and soft delete.
+- Added `AiQaMemoryController` endpoints: `GET /api/ai/memory/sessions`, `PATCH /api/ai/memory/messages/{messageId}`, and `DELETE /api/ai/memory/messages/{messageId}`.
+- `AiQaService` records memory after successful `QaRuntime` responses; `MemoryContextService` reads active session memory before `learning_event` fallback.
+- No frontend code, dependency, vector memory, or complex conflict-merge behavior was added.
+- Verification passed: focused P2 tests (26), adjacent AI QA/runtime tests (7), compile, and privacy grep. Real MySQL smoke remains opt-in and was not run in this slice.
+
+## 2026-06-21 QA streaming and trace workbench MVP
+
+- Implemented backend P1 MVP for AI QA streaming.
+- `AiQaController` now exposes `POST /api/ai/qa/stream` with `text/event-stream`.
+- The endpoint emits low-sensitive `status` stages, one `token` event with the generated answer, a `done` payload containing the structured `AiQaResponse` plus `latencyMs`, and fixed safe stream errors.
+- Stream generation delegates to existing `AiQaService.answer(...)`; controller does not call model/provider APIs directly.
+- No DB migration, dependency, true model token streaming, prompt schema persistence change, or independent quality dashboard endpoint was added.
+- Verification passed: `AiQaControllerTest` (5) and backend compile.
+- Next backend roadmap item: P2 memory lifecycle governance; future true token streaming should be a separate model-gateway slice.
+
+## 2026-06-21 Basic Verifier / Eval Gate MVP
+
+- Implemented the backend P0-4 verifier/eval gate boundary for AI QA.
+- Added `AnswerVerifier` and `QaEvalGate` under `aiqa/application/quality`.
+- `AiQaResponse` now includes `verification`; `QaRuntime` verifies the composed response and appends an `AnswerVerifier` tool call.
+- `FinalComposer` can merge verifier results into the response while preserving existing `sources`, `citations`, learner fit, next steps, uncertainty, quality flags, and review semantics.
+- `EvaluationSetService` accepts `AI_QA_ANSWER` evaluation sets with required question and quality criteria.
+- `EvaluationRunService` accepts QA gate metrics `schemaPassRate`, `verificationPassRate`, and lower-is-better `privacyLeakRate`.
+- No DB migration, dependency, frontend change, real model reviewer, batch eval runner, streaming endpoint, or memory lifecycle implementation was added.
+- Verification passed: focused `AnswerVerifierTest,QaEvalGateTest,QaRuntimeTest` (10), adjacent `AiQaControllerTest,EvaluationSetServiceTest,EvaluationRunServiceTest,RagEvaluationServiceTest,RagQueryServiceTest` (50), compile, and privacy grep.
+- Next backend slice: P1 QA streaming and trace workbench; P2 memory lifecycle governance remains open.
+
+## 2026-06-21 QaRuntime structured answer MVP
+
+- Implemented the backend P0-3 runtime boundary for AI QA.
+- Added `QaRuntime`, `IntentRouter`, `ContextOrchestrator`, and `FinalComposer`; `AiQaService` now delegates to `QaRuntime.run(...)`.
+- `/api/ai/qa` response DTO now adds `citations`, `learnerFit`, `nextSteps`, `uncertainty`, `qualityFlags`, and `requiresReview` while keeping `sources` for backward compatibility.
+- The runtime still uses existing `RagQueryService` answer / general fallback as draft answer; no real model provider call, dependency, DB migration, frontend change, or SSE endpoint was added.
+- No-source fallback now returns empty citations, explicit `GENERAL_FALLBACK / NO_COURSE_SOURCE_FALLBACK`, medium uncertainty, `NO_SOURCE_FALLBACK`, and review requirement.
+- Runtime `toolCalls` are safe summaries only and should stay free of raw prompts, provider secrets, teacher notes, raw profile snapshots, and chain-of-thought.
+- Verification passed: `QaRuntimeTest` (2), `AiQaControllerTest,QaModePolicyTest,MemoryContextServiceTest,RagQueryServiceTest` (32), and compile.
+- Next backend slice: P0-4 Basic Verifier / Eval Gate for citation/no-source/privacy/schema validation.
+
+## 2026-06-21 Memory And Answer Quality Roadmap
+
+- Added backend-facing docs-only roadmap for memory and answer quality optimization.
+- Current backend gap: `/api/ai/qa` mainly wraps `RagQueryService`; it does not yet orchestrate learner memory, recent session summary, real tool calls, verifier/reviewer, model gateway strategy, and eval feedback as one `QaRuntime`.
+- `FAST / THINKING / EXPERT` should become observable backend policy differences, not only `low/medium/high` string mapping.
+- `kb_chat_session` and `kb_chat_message` need future expansion before they can support ChatGPT-like multi-turn state.
+- First backend slice should be Memory/RAG Privacy Guard, covering RAG query/replay/citation persistence and profile snapshot minimization.
+
+## 2026-06-11 jc-ai Reference Optimization Roadmap
+
+- Completed backend-facing optimization planning from the `jc-ai` local reference zip.
+- Backend priority order captured: red-team/prompt-injection evaluation extension, Agent Trace scoring, governed HyDE branch, high-risk tool approval queue, outbound URL allowlist, scoped token budgets, and MCP/A2A ADRs.
+- The plan intentionally does not add runtime code, DB schema, dependencies, or protocol endpoints; future slices must reuse existing Evaluation, RAG, Orchestrator, model gateway, RBAC, trace, and token/cost foundations first.
+- First recommended backend slice: extend existing Evaluation Set/Run for red-team and prompt-injection regression samples.
+
+## 2026-06-11 AI QA No-Source Fallback
+
+- `/api/ai/qa` now preserves the RAG-first flow but converts no-source RAG results into an AI QA general fallback response.
+- Added `sourceStatus` and `sourcePolicy` to `AiQaResponse`.
+- `AiQaService` returns `GENERAL_FALLBACK / NO_COURSE_SOURCE_FALLBACK` with empty sources for no-source cases, and `COURSE_GROUNDED / COURSE_RAG` when citations exist.
+- `QaModePolicy` now produces safe summaries for both cited-course and general-fallback paths.
+- Verification passed: `mvn test "-Dtest=AiQaControllerTest,QaModePolicyTest,RagQueryServiceTest"` (29 passed).
+
+## 2026-06-11 Backend Follow-up Enhancements Plan Completion
+
+- Completed the `backend-architecture-todolist.md` follow-up enhancement closure with expert subagent reports for Agent/RAG, Backend, and Security & Quality.
+- Upgraded `ModelProviderExternalSmokeTest` from an environment-variable placeholder to a real opt-in OpenAI-compatible chat endpoint smoke.
+- Upgraded `QdrantVectorExternalSmokeTest` from a placeholder to a real opt-in Qdrant health / collection / expected-dimension smoke.
+- Updated `MysqlMigrationSmokeTest` latest migration expectations from V20/20 to V22/22 and added `model_provider` / `ops_alert_record` schema assertions.
+- Verification passed: adjacent backend `56 run, 0 failures, 0 errors, 3 skipped`; full backend `627 run, 0 failures, 0 errors, 3 skipped`; frontend `31 passed`.
+- Remaining production hardening: outbound URL allowlist for provider/webhook calls, DashScope dedicated SDK dependency review, native/cloud OCR, and user/course/agent-scoped token budget policy.
+
 ## 2026-06-11 F1 Model Provider Registry Backend
 
 - Implemented admin-side model provider registry backend slice.
