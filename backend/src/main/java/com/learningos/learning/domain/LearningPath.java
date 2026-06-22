@@ -3,9 +3,10 @@ package com.learningos.learning.domain;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
 
@@ -33,22 +34,13 @@ public class LearningPath {
     @Column(length = 12000)
     private String profileSnapshot;
 
-    @Column(nullable = false)
+    @CreationTimestamp
+    @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
+    @UpdateTimestamp
     @Column(nullable = false)
     private Instant updatedAt;
-
-    @PrePersist
-    void prePersist() {
-        Instant now = Instant.now();
-        if (createdAt == null) {
-            createdAt = now;
-        }
-        if (updatedAt == null) {
-            updatedAt = now;
-        }
-    }
 
     @PreUpdate
     void preUpdate() {
@@ -109,5 +101,13 @@ public class LearningPath {
 
     public void setProfileSnapshot(String profileSnapshot) {
         this.profileSnapshot = profileSnapshot;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
     }
 }
